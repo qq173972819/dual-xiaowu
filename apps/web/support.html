@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>支持与帮助 · 森穹小悟开放平台</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="森穹小悟"><span>森穹小悟<small>XIAOWU AI · OPEN PLATFORM</small></span></a>
+    <button class="nav-toggle" aria-label="菜单" onclick="document.getElementById('nav').classList.toggle('open')">☰</button>
+    <nav class="nav" id="nav">
+      <a href="index.html">首页</a>
+      <a href="quickstart.html">快速开始</a>
+      <a href="hardware.html">硬件产品库</a>
+      <a href="dev.html">开发指南</a>
+      <a href="extensions.html">扩展与插件</a>
+      <a href="support.html" class="active">支持与帮助</a>
+      <a href="open-source.html">开源与开放程度</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <span class="kicker">SUPPORT</span>
+  <h1>遇到问题？先在这里找答案。</h1>
+  <p class="lead">我们把高频问题、功能说明与更新日志集中在此。若仍无法解决，可在内容后台提交反馈或联系体验中心。</p>
+  <div class="actions">
+    <a class="btn primary" href="#faq">常见问题 →</a>
+    <a class="btn ghost" href="#features">功能说明</a>
+  </div>
+</section>
+
+<section class="section" id="faq">
+  <div class="sec-head"><div><span class="eyebrow">FAQ</span><h2>常见问题</h2></div></div>
+  <div class="grid">
+    <div class="card"><div class="ico">?</div><h3>设备连不上 Wi-Fi？</h3><p>确认路由器为 2.4GHz 频段（不支持 5GHz）；长按配网键进入热点，用手机连接后按引导填写。</p><span class="more">更多 →</span></div>
+    <div class="card"><div class="ico">?</div><h3>屏幕不刷新？</h3><p>墨水屏刷新需数秒且耗电；请在内容后台点击「立即同步」，或等待下一个刷新周期。</p><span class="more">更多 →</span></div>
+    <div class="card"><div class="ico">?</div><h3>资费如何计算？</h3><p>设备本地显示免费；AI 生成类内容按所选大模型计费，可在个人配置中绑定自有 Key 以避免平台扣费。</p><span class="more">更多 →</span></div>
+    <div class="card"><div class="ico">?</div><h3>和旧版不兼容？</h3><p>C3 与 S3 固件不可混刷；NFC 挂件无需电池，靠近即可刷新，与联网设备相互独立。</p><span class="more">更多 →</span></div>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="sec-head"><div><span class="eyebrow">FEATURES</span><h2>功能说明</h2></div></div>
+  <div class="grid">
+    <div class="card"><div class="ico">★</div><h3>页面切换与待机</h3><p>支持多内容页轮播与低功耗待机，唤醒后即时刷新当前页。</p></div>
+    <div class="card"><div class="ico">☀</div><h3>时钟与天气</h3><p>本地时钟 + 天气卡片；天气为演示数据，接入真实服务需配置数据源。</p></div>
+    <div class="card"><div class="ico">⏱</div><h3>倒计时 / 番茄钟</h3><p>学习场景常用计时组件，结束后自动回显结果。</p></div>
+    <div class="card"><div class="ico">⊚</div><h3>NFC 与轮播</h3><p>支持 NFC 触发内容切换；多模板可定时轮播。</p></div>
+  </div>
+</section>
+
+<section class="section" id="changelog">
+  <div class="sec-head"><div><span class="eyebrow">CHANGELOG</span><h2>更新日志</h2></div></div>
+  <div class="prose">
+    <h3>v0.1.0（当前）</h3>
+    <p> consolidated 后端上线：统一用户态 / 设备态 / 运营态鉴权；双屏配置、渲染管线（A 屏 BMP / B 屏 raw 2bpp）、预览快照、老师授权推送、快递与 OCR 演示接口全部可用。</p>
+    <h3>路线图</h3>
+    <p>真实天气与快递数据源接入、AI 生成内容模板、Webhook 出站与开发者 App 作用域细化。</p>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="col"><h4>森穹小悟</h4><a href="quickstart.html">快速开始</a><a href="hardware.html">硬件产品库</a><a href="dev.html">开发指南</a></div>
+    <div class="col"><h4>生态</h4><a href="extensions.html">扩展与插件</a><a href="open-source.html">开源与开放程度</a><a href="support.html">支持与帮助</a></div>
+    <div class="note"><p>森穹小悟 AI 体验中心 · 成都「极客谷」</p><p>文档全部公开，无需登录即可阅读。</p></div>
+  </div>
+</footer>
+<script src="assets/site.js"></script>
+</body>
+</html>

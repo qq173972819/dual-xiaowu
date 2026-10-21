@@ -1,0 +1,76 @@
+<!-- 推送通知便签（Page 4） -->
+<view class="container">
+  <view class="page-title">推送 - 通知便签</view>
+  <view class="page-sub" wx:if="{{device}}">当前设备：{{device.name}}</view>
+
+  <view class="segment">
+    <view class="segment-item {{tab==='text'?'active':''}}" bindtap="onTab" data-tab="text">粘贴文字</view>
+    <view class="segment-item {{tab==='ocr'?'active':''}}" bindtap="onTab" data-tab="ocr">拍照识别 OCR</view>
+  </view>
+
+  <view class="field-label">通知 / 提醒内容</view>
+  <textarea
+    class="textarea"
+    placeholder="填写通知、提醒事项"
+    value="{{content}}"
+    bindinput="onInput"
+    maxlength="-1"
+  />
+
+  <view wx:if="{{tab==='ocr'}}" style="margin-top:16rpx;display:flex;gap:16rpx;">
+    <button class="btn btn-secondary btn-sm" style="flex:1" bindtap="onCamera">拍照识别</button>
+    <button class="btn btn-secondary btn-sm" style="flex:1" bindtap="onAlbum">从相册选图</button>
+  </view>
+
+  <view class="field-label">标签来源</view>
+  <view class="radio-group">
+    <view class="radio-item {{source==='parent'?'active':''}} {{role==='teacher'?'disabled':''}}" bindtap="onSource" data-src="parent">
+      <view class="radio-dot"></view>
+      <view>
+        <view>标记为【家长备注】</view>
+        <view class="card-desc">仅家长可标记</view>
+      </view>
+    </view>
+    <view class="radio-item {{source==='teacher'?'active':''}}" bindtap="onSource" data-src="teacher">
+      <view class="radio-dot"></view>
+      <view>
+        <view>标记为【老师通知】</view>
+        <view class="card-desc" wx:if="{{role==='teacher'}}">老师推送固定为老师通知</view>
+        <view class="card-desc" wx:else>来自任课老师的通知</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="field-label">过期策略</view>
+  <view class="radio-group">
+    <view class="radio-item {{!persistent?'active':''}}" bindtap="onExpire" data-p="0">
+      <view class="radio-dot"></view>
+      <view>
+        <view>当日自动消失</view>
+        <view class="card-desc">默认，当日 24 点自动归档</view>
+      </view>
+    </view>
+    <view class="radio-item {{persistent?'active':''}} {{role==='teacher'?'disabled':''}}" bindtap="onExpire" data-p="1">
+      <view class="radio-dot"></view>
+      <view>
+        <view>持续展示（直到手动删除）</view>
+        <view class="card-desc" wx:if="{{role==='teacher'}}">老师不可设置持续便签</view>
+        <view class="card-desc" wx:else>家长专属，手动删除才消失</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="field-label">预览</view>
+  <view class="epd-preview">
+    <view class="epd-title">
+      <text>📝 通知便签</text>
+      <text class="muted">{{source==='teacher'?'👩‍🏫 老师':'👨 家长'}}</text>
+    </view>
+    <view wx:if="{{content}}" class="epd-line"><text>{{content}}</text></view>
+    <view wx:else class="epd-empty">暂无内容</view>
+  </view>
+
+  <button class="btn btn-primary btn-block" style="margin-top:28rpx" bindtap="onPush" disabled="{{pushing}}">
+    {{pushing ? '推送中...' : '一键推送到看板'}}
+  </button>
+</view>

@@ -1,0 +1,55 @@
+<!-- 老师授权管理 -->
+<view class="container">
+  <view class="page-title">老师授权</view>
+  <view class="page-sub">生成授权码发给老师，老师凭码免注册进入小程序推送作业与便签。</view>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:if="{{!loading}}">
+    <view class="card">
+      <view class="card-title">生成授权码</view>
+      <view class="field-label">老师姓名</view>
+      <input class="input" placeholder="如 王老师" value="{{authName}}" bindinput="onAuthName" />
+      <view class="field-label">有效期</view>
+      <picker mode="selector" range="{{validityLabels}}" value="{{validityIdx}}" bindchange="onValidity">
+        <view class="picker">{{validityLabels[validityIdx]}}</view>
+      </picker>
+      <view class="field-label">权限</view>
+      <picker mode="selector" range="{{permLabels}}" value="{{permIdx}}" bindchange="onPerm">
+        <view class="picker">{{permLabels[permIdx]}}</view>
+      </picker>
+      <button class="btn btn-primary btn-block" bindtap="onGenerate" disabled="{{busy}}">生成授权码</button>
+
+      <block wx:if="{{generated}}">
+        <view class="divider"></view>
+        <view class="card-row">
+          <text class="card-title">授权码</text>
+          <text class="tag tag-ok">{{generated.auth_code}}</text>
+        </view>
+        <view class="card-desc">{{generated.auth_name}} · {{generated.permission === 'note_and_homework' ? '便签 + 追加作业' : '仅通知便签'}}</view>
+        <button class="btn btn-secondary btn-block" bindtap="onCopy">复制授权码</button>
+      </block>
+    </view>
+
+    <view class="card">
+      <view class="card-row">
+        <text class="card-title">授权列表</text>
+        <text class="muted">{{items.length}} 个</text>
+      </view>
+      <view wx:if="{{items.length === 0}}" class="hint">还没有生成授权码。</view>
+      <view wx:for="{{items}}" wx:key="id" class="list-item">
+        <view class="list-head">
+          <text class="tag {{item.is_frozen ? 'tag-off' : 'tag-ok'}}">{{item.auth_code}}</text>
+          <text class="muted">{{item.expire_time || '永久'}}</text>
+        </view>
+        <view class="card-desc">{{item.auth_name}} · {{item.permission === 'note_and_homework' ? '便签 + 追加作业' : '仅通知便签'}}</view>
+        <view class="list-actions">
+          <button wx:if="{{!item.is_frozen}}" class="btn btn-sm btn-secondary"
+                  data-code="{{item.auth_code}}" data-frozen="true" bindtap="onFreeze">冻结</button>
+          <button wx:else class="btn btn-sm btn-secondary"
+                  data-code="{{item.auth_code}}" data-frozen="false" bindtap="onFreeze">恢复</button>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

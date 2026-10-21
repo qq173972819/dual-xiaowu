@@ -1,0 +1,53 @@
+# ESP-IDF firmware (firmware-idf/) - ESP32-S3 dual-epaper board family.
+#
+# Parent repo rules also apply here (lib/, build/, *.log, .cache, env/,
+# target/ ...). This file re-enables what the parent would otherwise swallow.
+
+# --- Build artifacts (never commit: 372M+ per build dir) ---
+build/
+build-*/
+managed_components/
+components/
+dist/
+releases/
+tmp/
+.vscode/
+.devcontainer/
+.DS_Store
+.cache
+.clangd
+sdkconfig.old
+
+# --- Generated firmware / assets ---
+*.bin
+*.elf
+*.map
+mmap_generate_*.h
+main/assets/lang_config.h
+
+# --- Build and export logs ---
+*.log
+build_log*.txt
+export_log*.txt
+
+# --- Python ---
+__pycache__/
+*.pyc
+.env
+
+# --- WorkBuddy helper scratch output ---
+.workbuddy/tmp/
+.workbuddy/*_debug.txt
+.workbuddy/flash_log*.txt
+.workbuddy/bom_dump.txt
+.workbuddy/export_test.txt
+.workbuddy/pathlen.txt
+
+# --- KEEP THESE (parent/old rules used to drop them) ---
+# Board type + audio circuit config lives in the ROOT sdkconfig;
+# .workbuddy/set_config.py rewrites it. Losing it = building the wrong board.
+!sdkconfig
+# Component version lock, required to restore managed_components/.
+!dependencies.lock
+# Parent repo has a global "lib/" rule - do not let it eat firmware sources.
+!**/lib/

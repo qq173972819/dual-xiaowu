@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>硬件产品库 · 森穹小悟</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="森穹小悟"><span>森穹小悟<small>XIAOWU AI · OPEN PLATFORM</small></span></a>
+    <button class="nav-toggle" aria-label="菜单" onclick="document.getElementById('nav').classList.toggle('open')">☰</button>
+    <nav class="nav" id="nav">
+      <a href="index.html">首页</a>
+      <a href="quickstart.html">快速开始</a>
+      <a href="hardware.html" class="active">硬件产品库</a>
+      <a href="dev.html">开发指南</a>
+      <a href="extensions.html">扩展与插件</a>
+      <a href="support.html">支持与帮助</a>
+      <a href="open-source.html">开源与开放程度</a>
+    </nav>
+    <a class="btn primary header-cta" href="http://127.0.0.1:8103" target="_blank" rel="noopener">登录内容后台</a>
+  </div>
+</header>
+
+<section class="hero">
+  <span class="kicker">HARDWARE</span>
+  <h1>硬件产品库</h1>
+  <p class="lead">已量产的 C3 单屏系列、NFC 无电池挂件，以及在研的 S3 一体双屏。两款设备的屏幕特性与固件不同，刷写前请核对型号。</p>
+</section>
+
+<section class="section" id="c3">
+  <div class="sec-head"><div><span class="eyebrow">PRODUCT</span><h2>小悟 C3 系列</h2></div></div>
+  <div class="prose">
+    <p>基于 ESP32-C3，提供 <b>4.2 / 5.83 / 3.7 寸</b> 三种尺寸，支持双 / 三 / 四色电子墨水屏。已量产，适合便签、课表、提醒等轻量场景。</p>
+    <table>
+      <tr><th>型号</th><th>尺寸</th><th>色彩</th><th>主控</th><th>状态</th></tr>
+      <tr><td>C3 4.2</td><td>4.2″ (400×300)</td><td>黑白 / 三色 / 四色</td><td>ESP32-C3</td><td>量产</td></tr>
+      <tr><td>C3 5.83</td><td>5.83″ (648×480)</td><td>四色 (JD79665)</td><td>ESP32-C3</td><td>量产</td></tr>
+      <tr><td>C3 3.7</td><td>3.7″</td><td>双色</td><td>ESP32-C3</td><td>量产</td></tr>
+    </table>
+    <p>按键约定：配网长按 BOOT 键 5 秒进入入口模式；活跃 / 间歇电源模式由 NVS 与服务器双重判定。</p>
+  </div>
+</section>
+
+<section class="section" id="nfc">
+  <div class="sec-head"><div><span class="eyebrow">PRODUCT</span><h2>NFC 无电池挂件</h2></div></div>
+  <div class="prose">
+    <p>1.54 寸四色墨水屏，<b>无需电池</b>，依靠 NFC 场能量供电，靠近读写器即刷新显示。适用于门牌、价签、提醒卡、工牌等免维护场景。</p>
+    <ul><li>色彩：四色（黑 / 白 / 红 / 黄）</li><li>供电：NFC 无线取电，无电池</li><li>尺寸：1.54 寸</li></ul>
+  </div>
+</section>
+
+<section class="section" id="s3">
+  <div class="sec-head"><div><span class="eyebrow">PRODUCT · 在研</span><h2>小悟 S3 双屏</h2></div></div>
+  <div class="prose">
+    <p>基于 ESP32-S3 的一体双屏 AI 方案：<b>FPC1 黑白信息屏</b>（快速刷新文字）+ <b>FPC2 彩色图像屏</b>（三色 / 四色结构与图像），集成语音交互与 TF 卡，面向 AI 对话、录音与内容展示场景。</p>
+    <table>
+      <tr><th>屏幕</th><th>角色</th><th>色彩</th><th>典型尺寸</th></tr>
+      <tr><td>A · FPC1</td><td>信息屏（快刷）</td><td>黑白 (2 色)</td><td>4.2″ (400×300)</td></tr>
+      <tr><td>B · FPC2</td><td>图像屏</td><td>黑白红 / 黑白红黄 (3/4 色)</td><td>4.2″ / 5.83″</td></tr>
+    </table>
+    <div class="callout">S3 双屏固件仍在开发：KEY+ 长按 3 秒重新配对，电源模式切换经 MCP 下发，设备唤醒时 GET 双屏配置并按 A/B 屏渲染。</div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="col"><h4>森穹小悟</h4><a href="quickstart.html">快速开始</a><a href="hardware.html">硬件产品库</a><a href="dev.html">开发指南</a></div>
+    <div class="col"><h4>生态</h4><a href="extensions.html">扩展与插件</a><a href="open-source.html">开源与开放程度</a><a href="support.html">支持与帮助</a></div>
+    <div class="note"><p>森穹小悟 AI 体验中心 · 成都「极客谷」</p><p>公开产品文档，无需登录即可阅读。</p></div>
+  </div>
+</footer>
+<script src="assets/site.js"></script>
+</body>
+</html>

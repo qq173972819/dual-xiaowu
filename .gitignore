@@ -1,0 +1,17 @@
+.venv/
+node_modules/
+.next/
+managed_components/
+sdkconfig
+__pycache__/
+.pytest_cache/
+*.pyc
+*.db
+*.db-shm
+*.db-wal
+.env
+runtime_uploads/
+uploads/
+dist/
+build/
+*.egg-info/

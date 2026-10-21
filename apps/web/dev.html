@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>开发指南 · 森穹小悟开放平台</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="森穹小悟"><span>森穹小悟<small>XIAOWU AI · OPEN PLATFORM</small></span></a>
+    <button class="nav-toggle" aria-label="菜单" onclick="document.getElementById('nav').classList.toggle('open')">☰</button>
+    <nav class="nav" id="nav">
+      <a href="index.html">首页</a>
+      <a href="quickstart.html">快速开始</a>
+      <a href="hardware.html">硬件产品库</a>
+      <a href="dev.html" class="active">开发指南</a>
+      <a href="extensions.html">扩展与插件</a>
+      <a href="support.html">支持与帮助</a>
+      <a href="open-source.html">开源与开放程度</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <span class="kicker">DEVELOPER GUIDE</span>
+  <h1>把你的内容，写进这块屏。</h1>
+  <p class="lead">无论你是家长、老师，还是行业开发者，都能通过开放接口把课程表、作业、便签与自定义模板推送到小悟双屏。下面按「固件 → 接口 → 接入」的顺序组织。</p>
+  <div class="actions">
+    <a class="btn primary" href="#firmware">官方固件与刷写 →</a>
+    <a class="btn ghost" href="#api">开放 API 文档</a>
+  </div>
+</section>
+
+<section class="section" id="firmware">
+  <div class="sec-head"><div><span class="eyebrow">FIRMWARE</span><h2>官方固件与刷写</h2></div></div>
+  <p class="sec-sub">S3 双屏本地升级；C3 固件获取、编译与烧录说明。</p>
+  <div class="grid">
+    <div class="card"><div class="ico">⚙</div><h3>S3 双屏本地升级</h3><p>通过浏览器进入设备配网门户，上传 <code>.bin</code> 固件即可本地升级，无需拆机。固件为 ESP32-S3 专用，切勿刷到 C3 设备。</p><span class="more">查看步骤 →</span></div>
+    <div class="card"><div class="ico">⌨</div><h3>C3 固件编译烧录</h3><p>C3 使用 PlatformIO 工程，支持 4.2 / 5.83 / 3.7 寸与双/三/四色屏；烧录前请确认目标屏型与工程配置一致。</p><span class="more">环境准备 →</span></div>
+    <div class="card"><div class="ico">⟲</div><h3>版本与回滚</h3><p>每次升级保留上一版本，异常时可在门户内回滚。生产固件签名校验开启后，仅接受官方签名包。</p><span class="more">版本策略 →</span></div>
+  </div>
+</section>
+
+<section class="section" id="api">
+  <div class="sec-head"><div><span class="eyebrow">OPEN API</span><h2>开放 API 文档</h2></div><a class="more" href="http://127.0.0.1:8104/docs" target="_blank" rel="noopener">在线 Swagger →</a></div>
+  <p class="sec-sub">设备认证、双屏内容配置下发、待办与屏幕内容推送接口。</p>
+  <div class="prose">
+    <h3>鉴权模型</h3>
+    <p>平台提供三种鉴权上下文，互不冲突：</p>
+    <table>
+      <thead><tr><th>场景</th><th>凭证</th><th>典型用途</th></tr></thead>
+      <tbody>
+        <tr><td>用户内容配置</td><td><code>Authorization: Bearer &lt;user_token&gt;</code></td><td>PC 后台 / 小程序读写自己绑定的设备</td></tr>
+        <tr><td>设备自身</td><td><code>X-Device-Token</code></td><td>固件拉取双屏帧、上报心跳与运行模式</td></tr>
+        <tr><td>运营后台</td><td><code>X-Admin-Key</code></td><td>管理员查看全局设备、任务与审计</td></tr>
+      </tbody>
+    </table>
+    <div class="callout">设备标识统一使用 MAC（大写，去分隔符）。固件启动后先 <code>POST /api/device/{mac}/token</code> 领取 <code>X-Device-Token</code>，再凭此拉取 <code>/api/render</code> 的屏幕帧。</div>
+    <h3>核心端点一览</h3>
+    <table>
+      <thead><tr><th>方法 / 路径</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET/POST /api/device/{mac}/dual-config</code></td><td>双屏内容配置读写（用户态 / 设备态）</td></tr>
+        <tr><td><code>GET /api/render?persona=DUAL_A|DUAL_B</code></td><td>固件拉取 A 屏 BMP / B 屏 raw 2bpp 帧</td></tr>
+        <tr><td><code>GET /api/preview</code></td><td>浏览器快照预览，返回 PNG</td></tr>
+        <tr><td><code>POST /api/push/homework</code> · <code>/api/push/note</code></td><td>老师授权码推送作业 / 便签</td></tr>
+        <tr><td><code>POST /api/device/{mac}/sync</code></td><td>触发设备立即刷新（含墨水屏保护限流）</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section" id="sdk">
+  <div class="sec-head"><div><span class="eyebrow">INTEGRATE</span><h2>小程序与 PC 后台接入</h2></div></div>
+  <div class="grid">
+    <div class="card"><div class="ico">◉</div><h3>微信小程序</h3><p>家长端内容配置入口，扫码绑定、课程表与便签推送。Demo 默认连接本地后端，真机需改 HTTPS 合法域名。</p><span class="more">接入说明 →</span></div>
+    <div class="card"><div class="ico">▤</div><h3>PC 内容后台</h3><p>双屏 A/B 配置、课程表、家庭日程与老师授权管理。Next.js 前端，默认反代到 <code>127.0.0.1:8104</code>。</p><span class="more">运行方式 →</span></div>
+    <div class="card"><div class="ico">◆</div><h3>自托管</h3><p>后端为单进程 FastAPI，数据存本地 SQLite；前端构建后可由任意静态服务托管。</p><span class="more">部署指引 →</span></div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="col"><h4>森穹小悟</h4><a href="quickstart.html">快速开始</a><a href="hardware.html">硬件产品库</a><a href="dev.html">开发指南</a></div>
+    <div class="col"><h4>生态</h4><a href="extensions.html">扩展与插件</a><a href="open-source.html">开源与开放程度</a><a href="support.html">支持与帮助</a></div>
+    <div class="note"><p>森穹小悟 AI 体验中心 · 成都「极客谷」</p><p>文档全部公开，无需登录即可阅读。</p></div>
+  </div>
+</footer>
+<script src="assets/site.js"></script>
+</body>
+</html>

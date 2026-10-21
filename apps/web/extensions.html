@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>扩展与插件 · 森穹小悟开放平台</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="森穹小悟"><span>森穹小悟<small>XIAOWU AI · OPEN PLATFORM</small></span></a>
+    <button class="nav-toggle" aria-label="菜单" onclick="document.getElementById('nav').classList.toggle('open')">☰</button>
+    <nav class="nav" id="nav">
+      <a href="index.html">首页</a>
+      <a href="quickstart.html">快速开始</a>
+      <a href="hardware.html">硬件产品库</a>
+      <a href="dev.html">开发指南</a>
+      <a href="extensions.html" class="active">扩展与插件</a>
+      <a href="support.html">支持与帮助</a>
+      <a href="open-source.html">开源与开放程度</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <span class="kicker">EXTENSIONS</span>
+  <h1>不止一块屏，而是一个生态。</h1>
+  <p class="lead">官方与社区围绕小悟双屏构建了小程序、PC 后台与多款独立固件。下面按「官方工具 → 社区扩展」组织，帮助你找到合适的接入方式。</p>
+  <div class="actions">
+    <a class="btn primary" href="#miniapp">官方小程序 →</a>
+    <a class="btn ghost" href="#community">社区开源固件</a>
+  </div>
+</section>
+
+<section class="section" id="miniapp">
+  <div class="sec-head"><div><span class="eyebrow">OFFICIAL</span><h2>官方工具</h2></div></div>
+  <p class="sec-sub">由森穹小悟官方维护，覆盖从绑定到推送的完整链路。</p>
+  <div class="grid">
+    <div class="card"><div class="ico">◉</div><h3>微信小程序</h3><p>家长移动端入口：扫码绑定设备、编辑课程表与便签、查看设备在线状态、接收老师推送。</p><span class="more">详情 →</span></div>
+    <div class="card"><div class="ico">▤</div><h3>PC 内容后台</h3><p>双屏 A/B 独立配置、课程表、家庭日程、共享成员与老师授权码管理，适合在电脑上批量维护。</p><span class="more">详情 →</span></div>
+    <div class="card"><div class="ico">⟨⟩</div><h3>开放 API</h3><p>开发者可通过 Bearer / X-Device-Token 接入，把自有系统内容推送到小悟双屏。</p><span class="more">接口文档 →</span></div>
+  </div>
+</section>
+
+<section class="section" id="community">
+  <div class="sec-head"><div><span class="eyebrow">COMMUNITY</span><h2>社区开源固件</h2></div></div>
+  <p class="sec-sub">由社区开发者维护的独立固件项目，可刷入同款硬件运行不同场景。</p>
+  <div class="grid">
+    <div class="card"><div class="ico">✦</div><h3>语音交互固件</h3><p>基于 S3 麦克风与扬声器，实现本地唤醒与对话，适合学习陪伴场景。</p><span class="more">浏览 →</span></div>
+    <div class="card"><div class="ico">✎</div><h3>单词机固件</h3><p>把双屏变成立式单词卡，支持艾宾浩斯复习曲线与发音。</p><span class="more">浏览 →</span></div>
+    <div class="card"><div class="ico">☷</div><h3>家庭记账 / 墨笺</h3><p>轻量信息屏应用，展示待办、日历与随手记，复用双屏渲染管线。</p><span class="more">浏览 →</span></div>
+  </div>
+  <div class="callout">社区固件仅适配指定硬件批次，刷写前请核对屏幕型号与引脚定义；官方不对第三方固件稳定性负责。</div>
+</section>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="col"><h4>森穹小悟</h4><a href="quickstart.html">快速开始</a><a href="hardware.html">硬件产品库</a><a href="dev.html">开发指南</a></div>
+    <div class="col"><h4>生态</h4><a href="extensions.html">扩展与插件</a><a href="open-source.html">开源与开放程度</a><a href="support.html">支持与帮助</a></div>
+    <div class="note"><p>森穹小悟 AI 体验中心 · 成都「极客谷」</p><p>文档全部公开，无需登录即可阅读。</p></div>
+  </div>
+</footer>
+<script src="assets/site.js"></script>
+</body>
+</html>

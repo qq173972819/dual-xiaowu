@@ -1,0 +1,3 @@
+# Audio circuit selection: MAX98357A amplifier + ICS-43434 I2S microphone
+# (98357_main_3). Used via SDKCONFIG_DEFAULTS together with a board fragment.
+CONFIG_SSD2683ZA_AUDIO_MAX98357_ICS43434=y

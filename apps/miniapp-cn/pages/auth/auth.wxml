@@ -1,0 +1,25 @@
+<!-- 老师授权码校验（Page 6） -->
+<view class="container">
+  <view class="page-title">老师快捷推送</view>
+  <view class="hint">由学生家长提供 6 位授权码，无需注册账号即可进入该学生设备的推送面板。</view>
+
+  <view class="field-label">输入 6 位授权码</view>
+  <view class="otp">
+    <view class="otp-box" wx:for="{{boxes}}" wx:key="index">{{codeArr[index]}}</view>
+  </view>
+  <input
+    class="otp-input"
+    type="number"
+    maxlength="6"
+    value="{{code}}"
+    bindinput="onInput"
+    focus="{{true}}"
+  />
+
+  <button class="btn btn-primary btn-block" style="margin-top:40rpx" bindtap="onVerify" disabled="{{code.length<6 || verifying}}">
+    {{verifying ? '校验中...' : '确认校验'}}
+  </button>
+  <button class="btn btn-ghost btn-block" bindtap="onBack">返回首页</button>
+
+  <view class="footer-note">演示授权码：123456（绑定「铠泽的墨看板」）</view>
+</view>

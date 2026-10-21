@@ -1,0 +1,21 @@
+<!-- 场景中心 -->
+<view class="container">
+  <view class="page-title">场景中心</view>
+  <view class="page-sub">先选生活，再配屏幕；切换场景不会删除已录入的内容。</view>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <view wx:for="{{scenes}}" wx:key="key"
+        class="scene-card {{sceneKey === item.key ? 'active' : ''}}"
+        data-key="{{item.key}}" bindtap="onSelect">
+    <view class="scene-top">
+      <text class="scene-name">{{item.name}}场景</text>
+      <text class="tag">{{item.eyebrow}}</text>
+    </view>
+    <view class="scene-desc">{{item.desc}}</view>
+  </view>
+
+  <view class="divider"></view>
+  <button class="btn btn-primary btn-block" bindtap="onSave" disabled="{{saving}}">保存场景</button>
+  <button class="btn btn-secondary btn-block" bindtap="goScreens">继续配置双屏</button>
+</view>

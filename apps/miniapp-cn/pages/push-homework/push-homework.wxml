@@ -1,0 +1,58 @@
+<!-- 推送今日作业（Page 3） -->
+<view class="container">
+  <view class="page-title">推送 - 今日作业</view>
+  <view class="page-sub" wx:if="{{device}}">当前设备：{{device.name}}</view>
+
+  <view class="segment">
+    <view class="segment-item {{tab==='text'?'active':''}}" bindtap="onTab" data-tab="text">粘贴文字</view>
+    <view class="segment-item {{tab==='ocr'?'active':''}}" bindtap="onTab" data-tab="ocr">拍照识别 OCR</view>
+  </view>
+
+  <view class="field-label">作业内容（支持多行 / 直接粘贴班级群作业）</view>
+  <textarea
+    class="textarea"
+    placeholder="直接粘贴班级群复制的作业内容..."
+    value="{{content}}"
+    bindinput="onInput"
+    maxlength="-1"
+  />
+
+  <view wx:if="{{tab==='ocr'}}" style="margin-top:16rpx;display:flex;gap:16rpx;">
+    <button class="btn btn-secondary btn-sm" style="flex:1" bindtap="onCamera">拍照识别</button>
+    <button class="btn btn-secondary btn-sm" style="flex:1" bindtap="onAlbum">从相册选图</button>
+  </view>
+
+  <view class="field-label">推送模式</view>
+  <view class="radio-group">
+    <view class="radio-item {{isAppend?'active':''}}" bindtap="onMode" data-append="1">
+      <view class="radio-dot"></view>
+      <view>
+        <view>追加到原有作业</view>
+        <view class="card-desc">默认，保留已有作业并在末尾新增</view>
+      </view>
+    </view>
+    <view class="radio-item {{!isAppend?'active':''}} {{role==='teacher'?'disabled':''}}" bindtap="onMode" data-append="0">
+      <view class="radio-dot"></view>
+      <view>
+        <view>覆盖清空原有作业</view>
+        <view class="card-desc" wx:if="{{role==='teacher'}}">老师无覆盖权限（后台已锁定）</view>
+        <view class="card-desc" wx:else>清空今日作业后写入新内容</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="field-label">预览效果（模拟 A 屏排版）</view>
+  <view class="epd-preview">
+    <view class="epd-title"><text>📖 今日作业</text><text class="muted">{{lines.length}} 条</text></view>
+    <block wx:if="{{lines.length > 0}}">
+      <view wx:for="{{lines}}" wx:key="index" class="epd-line">
+        <text class="epd-bullet">·</text><text>{{item}}</text>
+      </view>
+    </block>
+    <view wx:else class="epd-empty">暂无内容，粘贴或拍照后在此预览</view>
+  </view>
+
+  <button class="btn btn-primary btn-block" style="margin-top:28rpx" bindtap="onPush" disabled="{{pushing}}">
+    {{pushing ? '推送中...' : '一键推送到看板'}}
+  </button>
+</view>

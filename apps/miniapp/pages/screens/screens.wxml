@@ -1,0 +1,73 @@
+<!-- 双屏配置：A 屏 / B 屏 -->
+<view class="container">
+  <view class="page-title">{{sceneName}}场景 · 双屏配置</view>
+  <view class="page-sub">A 屏负责快速文字信息，B 屏负责彩色结构与图像。</view>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:if="{{!loading}}">
+    <view class="segment">
+      <view class="segment-item {{side === 'a' ? 'active' : ''}}" data-side="a" bindtap="onSide">A 屏 · 黑白快刷</view>
+      <view class="segment-item {{side === 'b' ? 'active' : ''}}" data-side="b" bindtap="onSide">B 屏 · 三/四色</view>
+    </view>
+
+    <view class="card">
+      <view class="field-label">屏幕内容名称</view>
+      <input class="input" wx:if="{{side === 'a'}}" value="{{a.title}}" bindinput="onTitle" />
+      <input class="input" wx:else value="{{b.title}}" bindinput="onTitle" />
+
+      <block wx:if="{{side === 'a'}}">
+        <view class="field-label">A 屏内容</view>
+        <picker mode="selector" range="{{aModeLabels}}" value="{{aModeIdx}}" bindchange="onAMode">
+          <view class="picker">{{a.mode ? aModeLabels[aModeIdx] : '请选择'}}</view>
+        </picker>
+      </block>
+
+      <view class="field-label">数据来源</view>
+      <picker mode="selector" range="{{sources}}" value="{{sideSourceIdx}}"
+              bindchange="onSource">
+        <view class="picker">{{side === 'a' ? a.source : b.source}}</view>
+      </picker>
+
+      <view class="field-label">刷新频率</view>
+      <picker mode="selector" range="{{refreshes}}" value="{{sideRefreshIdx}}"
+              bindchange="onRefresh">
+        <view class="picker">{{side === 'a' ? a.refresh : b.refresh}}</view>
+      </picker>
+    </view>
+
+    <view class="card">
+      <view class="card-row">
+        <text class="card-title">内容模块</text>
+        <text class="muted">{{side === 'a' ? a.modules.length : b.modules.length}} 个</text>
+      </view>
+      <view wx:for="{{side === 'a' ? a.modules : b.modules}}" wx:key="*this" class="ct-row">
+        <view class="ct-inputs">
+          <input class="input sm" value="{{item}}" data-idx="{{index}}" bindinput="onModuleInput" />
+          <view class="ct-clear" data-idx="{{index}}" bindtap="removeModule">删除</view>
+        </view>
+      </view>
+      <view class="ct-inputs" style="margin-top:16rpx">
+        <input class="input sm" placeholder="新模块名" value="{{newModule}}" bindinput="onNewModule" />
+        <view class="ct-clear" bindtap="addModule">添加</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-title">屏幕规格</view>
+      <view class="card-desc">需与设备实际面板一致（编译时由 menuconfig 确定）。</view>
+      <view class="field-label">屏幕尺寸</view>
+      <picker mode="selector" range="{{['4.2 寸（400 × 300）','5.83 寸（648 × 480）']}}" value="{{screenSizeIdx}}" bindchange="onSize">
+        <view class="picker">{{screenSizeIdx === 1 ? '5.83 寸（648 × 480）' : '4.2 寸（400 × 300）'}}</view>
+      </picker>
+      <view class="field-label">B 屏色彩（FPC2）</view>
+      <picker mode="selector" range="{{['黑白（2 色）','黑白红（3 色）','黑白红黄（4 色）']}}" value="{{colorsIdx}}" bindchange="onColors">
+        <view class="picker">{{colorsIdx === 0 ? '黑白（2 色）' : (colorsIdx === 1 ? '黑白红（3 色）' : '黑白红黄（4 色）')}}</view>
+      </picker>
+    </view>
+  </block>
+
+  <view class="divider"></view>
+  <button class="btn btn-primary btn-block" bindtap="onSave" disabled="{{saving}}">保存并应用到设备</button>
+  <view class="hint">保存后写入该设备双屏配置，设备下次唤醒即拉取渲染。</view>
+</view>

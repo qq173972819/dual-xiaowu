@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>开源与开放程度 · 森穹小悟开放平台</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="森穹小悟"><span>森穹小悟<small>XIAOWU AI · OPEN PLATFORM</small></span></a>
+    <button class="nav-toggle" aria-label="菜单" onclick="document.getElementById('nav').classList.toggle('open')">☰</button>
+    <nav class="nav" id="nav">
+      <a href="index.html">首页</a>
+      <a href="quickstart.html">快速开始</a>
+      <a href="hardware.html">硬件产品库</a>
+      <a href="dev.html">开发指南</a>
+      <a href="extensions.html">扩展与插件</a>
+      <a href="support.html">支持与帮助</a>
+      <a href="open-source.html" class="active">开源与开放程度</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <span class="kicker">OPEN SOURCE &amp; ACCESS</span>
+  <h1>我们开放什么，不开放什么，讲清楚。</h1>
+  <p class="lead">森穹小悟坚持「业务平台开源、硬件与核心供应链受控」的路线。下面用三层明确每一项能力的开放程度，便于开发者与个人用户预期。</p>
+  <div class="actions">
+    <a class="btn primary" href="#tiers">开放程度一览 →</a>
+    <a class="btn ghost" href="#scope">开源范围</a>
+  </div>
+</section>
+
+<section class="section" id="tiers">
+  <div class="sec-head"><div><span class="eyebrow">ACCESS LEVELS</span><h2>开放程度一览</h2></div></div>
+  <p class="sec-sub">从「完全公开」到「内部管理」，逐层收紧。公开内容无需登录即可访问。</p>
+  <div class="tiers">
+    <div class="tier open"><span class="tag">完全公开 · 无需登录</span><h3>公开文档与资料</h3><ul><li>本产品文档站全部内容</li><li>硬件规格与接口说明</li><li>开放 API 文档（Swagger）</li><li>刷写 / 编译指南</li></ul></div>
+    <div class="tier open"><span class="tag">开源 · 可获取</span><h3>开源内容</h3><ul><li>基础固件（GitHub）</li><li>平台接口定义与 SDK</li><li>硬件原理图（部分）</li><li>结构文件（部分）</li></ul></div>
+    <div class="tier login"><span class="tag">登录后可用</span><h3>用户内容能力</h3><ul><li>设备绑定与双屏配置</li><li>课程表 / 便签 / 作业</li><li>家庭日程与共享成员</li><li>老师授权码</li></ul></div>
+    <div class="tier gated"><span class="tag">内部管理</span><h3>运营后台</h3><ul><li>全局设备与任务</li><li>内容模板与插件</li><li>开发者 App 与审计</li><li>仅限管理员密钥</li></ul></div>
+  </div>
+</section>
+
+<section class="section" id="scope">
+  <div class="sec-head"><div><span class="eyebrow">SCOPE</span><h2>开源范围说明</h2></div></div>
+  <div class="prose">
+    <h3>开源</h3>
+    <p>业务平台（本仓库）以开源方式提供：设备注册、心跳、能力查询、内容任务下发、Webhook Outbox、双屏渲染管线与内容管理后台。开发者可基于此接入教育、养老、家庭、办公等业务。</p>
+    <h3>受控（不在本仓库开放）</h3>
+    <p>硬件设计、板级支持包（BSP）、屏幕驱动、生产与校准资料受供应链与质量管控约束，仅向授权合作伙伴开放。OTA 签名服务与医疗诊断功能当前不对外开放。</p>
+    <div class="callout">当前平台仅完整支持 <code>xiaowu-s3-dual</code>（ESP32-S3、A/B 双 400×300 墨水屏）。C3 / NFC / 并口屏适配与真实 BSP 按计划后续纳入。</div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="col"><h4>森穹小悟</h4><a href="quickstart.html">快速开始</a><a href="hardware.html">硬件产品库</a><a href="dev.html">开发指南</a></div>
+    <div class="col"><h4>生态</h4><a href="extensions.html">扩展与插件</a><a href="open-source.html">开源与开放程度</a><a href="support.html">支持与帮助</a></div>
+    <div class="note"><p>森穹小悟 AI 体验中心 · 成都「极客谷」</p><p>文档全部公开，无需登录即可阅读。</p></div>
+  </div>
+</footer>
+<script src="assets/site.js"></script>
+</body>
+</html>

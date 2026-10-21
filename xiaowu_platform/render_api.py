@@ -1,0 +1,213 @@
+"""设备取图 / 浏览器预览接口。
+
+- GET /api/render   固件拉取双屏画面（DUAL_A=黑白 BMP，DUAL_B=彩色 2bpp 原始帧）。
+- GET /api/preview  浏览器快照预览（返回 PNG），供内容后台「预览」按钮使用。
+
+固件契约（firmware-dual 双屏板）：
+- DUAL_A：GET /api/render?w=400&h=300&v=3.2&persona=DUAL_A  + X-Device-Token → 1-bit BMP
+- DUAL_B：GET /api/render?w=400&h=300&v=3.2&bpp=2&colors=3|4&persona=DUAL_B → raw 2bpp
+- 未绑定：返回带配对码的引导图，并置 X-Device-Unbound: 1
+- 未注册（无 MAC）：返回重新配网引导图，并置 X-Device-Unregistered: no-mac
+"""
+from datetime import UTC, datetime
+from typing import Annotated, Optional
+
+from fastapi import APIRouter, Header, Query, Response
+from fastapi.responses import JSONResponse
+
+from .render import (
+    image_to_bmp_bytes,
+    image_to_png_bytes,
+    image_to_raw_2bpp,
+    image_to_raw_4bpp,
+    render_dual_screen,
+    render_error,
+    render_unbound,
+    render_unregistered,
+)
+from .settings import settings
+from .store import Store
+
+store = Store(settings.database_path)
+router = APIRouter(tags=["render"])
+
+
+def _pack_raw(img, colors: int, bpp: int) -> bytes:
+    """按面板色数打包原始帧：六色 + bpp>=4 走 4bpp，其余 2bpp。"""
+    if bpp >= 4 and colors >= 6:
+        return image_to_raw_4bpp(img)
+    return image_to_raw_2bpp(img)
+
+
+@router.get("/api/render")
+def render(
+    mac: Optional[str] = Query(default=None),
+    persona: Optional[str] = Query(default=None),
+    w: int = Query(default=400, ge=100, le=1600),
+    h: int = Query(default=300, ge=100, le=1200),
+    colors: int = Query(default=4, ge=2, le=6),
+    bpp: int = Query(default=2, ge=1, le=4),
+    v: Optional[float] = Query(default=None),
+    rssi: Optional[int] = Query(default=None),
+    battery: Optional[int] = Query(default=None),
+    x_device_token: Optional[str] = Header(default=None),
+):
+    screen = "B" if str(persona or "").upper() == "DUAL_B" else "A"
+    is_color = screen == "B"  # B 屏恒为彩色原始帧
+    start_time = datetime.now(UTC)
+
+    # 1) 无 MAC：未注册引导图
+    if not mac:
+        guide = render_unregistered(w, h)
+        if is_color:
+            return Response(content=_pack_raw(guide, colors, bpp), media_type="application/octet-stream",
+                            headers={"X-Device-Unregistered": "no-mac"})
+        return Response(content=image_to_bmp_bytes(guide), media_type="image/bmp",
+                        headers={"X-Device-Unregistered": "no-mac"})
+
+    mac = mac.strip().upper()
+    # 2) 设备未注册（无令牌可领）→ 重新配网引导
+    if not store.device_exists(mac):
+        guide = render_unregistered(w, h)
+        if is_color:
+            return Response(content=_pack_raw(guide, colors, bpp), media_type="application/octet-stream",
+                            headers={"X-Device-Unregistered": "no-mac"})
+        return Response(content=image_to_bmp_bytes(guide), media_type="image/bmp",
+                        headers={"X-Device-Unregistered": "no-mac"})
+
+    # 3) 令牌校验
+    if not (x_device_token and store.verify_device_token(mac, x_device_token)):
+        return Response(content=b"", status_code=401, media_type="application/octet-stream",
+                        headers={"X-Error": "invalid-device-token"})
+
+    # 顺手记一条心跳（固件只拉图、不 POST /heartbeat，避免网页显示离线）
+    try:
+        store.heartbeat(mac, {"firmware_version": "render", "battery_voltage": v, "rssi": rssi,
+                              "runtime_mode": "active"})
+    except Exception:  # noqa: BLE001
+        pass
+
+    owner = store.get_device_owner(mac)
+    # 4) 未绑定 → 带配对码引导图
+    if owner is None:
+        pair_code = store.get_claim_code(mac) or "------"
+        guide = render_unbound(mac, w, h, pair_code)
+        headers = {"X-Device-Unbound": "1"}
+        if is_color:
+            return Response(content=_pack_raw(guide, colors, bpp), media_type="application/octet-stream", headers=headers)
+        return Response(content=image_to_bmp_bytes(guide), media_type="image/bmp", headers=headers)
+
+    # 5) 已绑定 → 渲染双屏内容
+    cfg_row = store.get_content_config(mac)
+    dual_cfg = cfg_row["config"] if cfg_row else None
+
+    eff_colors = colors
+    if is_color:
+        screen_cfg = (dual_cfg or {}).get("screen") or {}
+        cfg_colors = screen_cfg.get("colors")
+        if isinstance(cfg_colors, int) and cfg_colors in (2, 3, 4):
+            eff_colors = min(cfg_colors, colors)
+
+    try:
+        if screen == "A":
+            img = render_dual_screen(mac, "A", w, h, 2, dual_cfg, battery=battery)
+            out_bytes = image_to_bmp_bytes(img)
+            out_media = "image/bmp"
+        else:
+            img = render_dual_screen(mac, "B", w, h, eff_colors, dual_cfg, battery=None)
+            out_bytes = _pack_raw(img, eff_colors, bpp)
+            out_media = "application/octet-stream"
+    except Exception as exc:  # noqa: BLE001
+        img = render_error(mac, w, h)
+        out_bytes = image_to_bmp_bytes(img)
+        out_media = "image/bmp"
+
+    elapsed_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
+    headers = {
+        "X-Render-Time-Ms": str(elapsed_ms),
+        "X-Mode-Id": str(persona or ""),
+        "X-Refresh-Minutes": "5" if screen == "A" else "30",
+    }
+    if store.consume_pending_refresh(mac):
+        headers["X-Pending-Refresh"] = "1"
+    return Response(content=out_bytes, media_type=out_media, headers=headers)
+
+
+@router.get("/api/preview")
+def preview(
+    mac: Optional[str] = Query(default=None),
+    persona: Optional[str] = Query(default=None),
+    w: int = Query(default=400, ge=100, le=1600),
+    h: int = Query(default=300, ge=100, le=1200),
+    colors: int = Query(default=4, ge=2, le=6),
+    bpp: int = Query(default=2, ge=1, le=4),
+    x_device_token: Optional[str] = Header(default=None),
+):
+    """浏览器快照预览：返回 PNG，便于在内容后台/小程序直接核对设备将显示的内容。"""
+    screen = "B" if str(persona or "").upper() == "DUAL_B" else "A"
+    if mac:
+        mac = mac.strip().upper()
+        dual_cfg = None
+        cfg_row = store.get_content_config(mac)
+        if cfg_row:
+            dual_cfg = cfg_row["config"]
+        # 未绑定也允许预览（展示空态/相册兜底），无需设备令牌
+        eff_colors = colors
+        if screen == "B":
+            screen_cfg = (dual_cfg or {}).get("screen") or {}
+            cfg_colors = screen_cfg.get("colors")
+            if isinstance(cfg_colors, int) and cfg_colors in (2, 3, 4):
+                eff_colors = min(cfg_colors, colors)
+            img = render_dual_screen(mac, "B", w, h, eff_colors, dual_cfg)
+        else:
+            img = render_dual_screen(mac, "A", w, h, 2, dual_cfg)
+        return Response(content=image_to_png_bytes(img), media_type="image/png",
+                        headers={"X-Mode-Id": str(persona or ""), "X-Cache-Hit": "0"})
+    # 无 mac：渲染一张演示图（默认学习场景）
+    demo_cfg = _demo_config()
+    if screen == "B":
+        img = render_dual_screen("DEMO", "B", w, h, colors, demo_cfg)
+    else:
+        img = render_dual_screen("DEMO", "A", w, h, 2, demo_cfg)
+    return Response(content=image_to_png_bytes(img), media_type="image/png",
+                    headers={"X-Mode-Id": str(persona or ""), "X-Cache-Hit": "0"})
+
+
+def _demo_config() -> dict:
+    """无设备时的演示双屏配置，方便打开预览即有内容。"""
+    return {
+        "version": 1,
+        "sceneKey": "study",
+        "screen": {"size": "4.2", "colors": 4},
+        "config": {
+            "study": {
+                "a": {"mode": "notes", "title": "便签"},
+                "b": {"mode": "course", "title": "课程表"},
+            }
+        },
+        "content": {
+            "notes": [
+                {"text": "今天记得带跳绳", "sender": "家长", "sender_type": "parent", "date": _today()},
+                {"text": "数学作业订正第 3 页", "sender": "老师", "sender_type": "teacher", "date": _today()},
+            ],
+            "courseTable": {
+                "enabled": True, "school": "森穹小学", "class_name": "三年级二班",
+                "periods": [
+                    {"start_hour": 8, "start_minute": 0, "end_hour": 8, "end_minute": 40},
+                    {"start_hour": 8, "start_minute": 50, "end_hour": 9, "end_minute": 30},
+                    {"start_hour": 10, "start_minute": 0, "end_hour": 10, "end_minute": 40},
+                    {"start_hour": 14, "start_minute": 0, "end_hour": 14, "end_minute": 40},
+                ],
+                "grid": [_weekday_grid()],
+            },
+        },
+    }
+
+
+def _today() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def _weekday_grid() -> list[dict]:
+    sample = ["语文", "数学", "英语", "体育"]
+    return [{"name": sample[i % len(sample)], "teacher": "王老师", "room": f"{i+1}01"} for i in range(4)]

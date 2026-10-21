@@ -1,0 +1,8 @@
+/* pages/profile/profile.wxss */
+.row-flex {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 12rpx;
+}
+.row-flex .input { flex: 1; }

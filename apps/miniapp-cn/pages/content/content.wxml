@@ -1,0 +1,315 @@
+<!-- 内容管理：课程表 / 便签 / 今日作业 / 阅读任务 / 相册 / 缴费台账 / 快递取件码 / 家庭日程 / 采购清单 / 纪念日 -->
+<view class="container">
+  <view class="page-title">内容管理</view>
+  <view class="page-sub" wx:if="{{deviceName}}">当前设备：{{deviceName}}</view>
+  <view class="page-sub" wx:else>未选择设备</view>
+
+  <view class="segment scroll">
+    <view wx:for="{{tabs}}" wx:key="key"
+          class="segment-item {{tab === item.key ? 'active' : ''}}"
+          data-key="{{item.key}}" bindtap="onTab">{{item.label}}</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <!-- ============ 课程表 ============ -->
+  <block wx:if="{{!loading && tab === 'course' && ct}}">
+    <view class="card">
+      <view class="field-label">班级 / 课程表名称</view>
+      <input class="input" value="{{ct.class_name}}" placeholder="如 三年级二班" bindinput="onClassInput" />
+      <view class="field-label">学校（选填）</view>
+      <input class="input" value="{{ct.school}}" placeholder="如 某某实验小学" bindinput="onSchoolInput" />
+      <view class="field-label">显示天数</view>
+      <picker mode="selector" range="{{['周一至周五','全周（含周末）']}}" value="{{ct.show_days === 7 ? 1 : 0}}" bindchange="onShowDays">
+        <view class="picker">{{ct.show_days === 7 ? '全周（含周末）' : '周一至周五'}}</view>
+      </picker>
+    </view>
+
+    <view class="segment day-tabs">
+      <view wx:for="{{visibleDays}}" wx:key="*this"
+            class="segment-item {{curDay === item ? 'active' : ''}}"
+            data-idx="{{item}}" bindtap="onDay">{{dayLabels[item]}}</view>
+    </view>
+
+    <view class="card">
+      <view wx:for="{{ct.periods}}" wx:for-item="p" wx:for-index="pi" wx:key="start_hour" class="ct-row">
+        <view class="ct-time">第{{pi + 1}}节 {{p.start_hour}}:{{p.start_minute < 10 ? '0' : ''}}{{p.start_minute}}</view>
+        <view class="ct-inputs">
+          <input class="input sm" placeholder="课程" value="{{ct.grid[curDay][pi] ? ct.grid[curDay][pi].name : ''}}"
+                 data-day="{{curDay}}" data-period="{{pi}}" data-field="name" bindinput="onCellInput" />
+          <input class="input sm" placeholder="老师" value="{{ct.grid[curDay][pi] ? ct.grid[curDay][pi].teacher : ''}}"
+                 data-day="{{curDay}}" data-period="{{pi}}" data-field="teacher" bindinput="onCellInput" />
+          <input class="input sm" placeholder="教室" value="{{ct.grid[curDay][pi] ? ct.grid[curDay][pi].room : ''}}"
+                 data-day="{{curDay}}" data-period="{{pi}}" data-field="room" bindinput="onCellInput" />
+        </view>
+        <view class="ct-clear" data-day="{{curDay}}" data-period="{{pi}}" bindtap="clearCell">清空</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- ============ 便签 ============ -->
+  <block wx:if="{{!loading && tab === 'notes'}}">
+    <view class="card">
+      <view class="field-label">便签内容</view>
+      <textarea class="textarea" placeholder="如 明天带跳绳" value="{{noteText}}" bindinput="onNoteInput" />
+      <view class="field-label">来源</view>
+      <picker mode="selector" range="{{['家长备注','老师通知']}}" value="{{noteSender === '老师' ? 1 : 0}}" bindchange="onNoteSender">
+        <view class="picker">{{noteSender === '老师' ? '老师通知' : '家长备注'}}</view>
+      </picker>
+      <view class="field-label">展示策略</view>
+      <picker mode="selector" range="{{['当日消失','持续展示']}}" value="{{notePersistent ? 1 : 0}}" bindchange="onNotePersistent">
+        <view class="picker">{{notePersistent ? '持续展示' : '当日消失'}}</view>
+      </picker>
+      <button class="btn btn-secondary btn-block" bindtap="addNote">添加便签</button>
+    </view>
+
+    <view wx:if="{{notes.length === 0}}" class="hint">还没有便签。</view>
+    <view wx:for="{{notes}}" wx:key="id" class="list-item">
+      <view class="list-head">
+        <text class="tag {{item.sender_type === 'teacher' ? 'tag-warn' : 'tag-ok'}}">{{item.sender}}</text>
+        <text class="muted">{{item.date}}{{item.persistent ? ' · 持续' : ''}}</text>
+      </view>
+      <view class="list-content">{{item.text}}</view>
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="removeNote">删除</button>
+      </view>
+    </view>
+  </block>
+
+  <!-- ============ 今日作业 ============ -->
+  <block wx:if="{{!loading && tab === 'homework'}}">
+    <view class="card">
+      <view class="field-label">作业内容</view>
+      <textarea class="textarea" placeholder="如 语文：背诵第 5 课" value="{{hwText}}" bindinput="onHwInput" />
+      <button class="btn btn-secondary btn-block" bindtap="addHomework">添加作业</button>
+    </view>
+
+    <view wx:if="{{homework.length === 0}}" class="hint">还没有作业。</view>
+    <view wx:for="{{homework}}" wx:key="id" class="list-item">
+      <view class="list-head">
+        <text class="list-content {{item.done ? 'done' : ''}}">{{item.text}}</text>
+        <text class="tag {{item.done ? 'tag-ok' : ''}}">{{item.done ? '已完成' : '待完成'}}</text>
+      </view>
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="toggleHomework">{{item.done ? '标为未完成' : '标为完成'}}</button>
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="removeHomework">删除</button>
+      </view>
+    </view>
+  </block>
+
+  <!-- ============ 阅读任务 ============ -->
+  <block wx:if="{{!loading && tab === 'reading'}}">
+    <view class="card">
+      <view class="field-label">书名</view>
+      <input class="input" placeholder="如 城南旧事" value="{{readTitle}}" bindinput="onReadTitle" />
+      <view class="field-label">进度</view>
+      <input class="input" placeholder="如 第 3 章 / 共 10 章" value="{{readProgress}}" bindinput="onReadProgress" />
+      <button class="btn btn-secondary btn-block" bindtap="addReading">添加阅读任务</button>
+    </view>
+
+    <view wx:if="{{reading.length === 0}}" class="hint">还没有阅读任务。</view>
+    <view wx:for="{{reading}}" wx:key="id" class="list-item">
+      <view class="list-head">
+        <text class="card-title">{{item.title}}</text>
+      </view>
+      <input class="input sm" placeholder="进度" value="{{item.progress}}" data-id="{{item.id}}" bindinput="onReadProgressInput" />
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="removeReading">删除</button>
+      </view>
+    </view>
+  </block>
+
+  <!-- ============ 相册 ============ -->
+  <block wx:if="{{!loading && tab === 'album'}}">
+    <view class="card">
+      <view class="card-title">相册</view>
+      <view class="page-sub">上传家庭照片，设备在无课 / 便签为空时自动展示；照片按日轮换。</view>
+      <button class="btn btn-secondary btn-block" bindtap="addPhoto">上传照片</button>
+      <view wx:if="{{albumPhotos.length === 0}}" class="hint">还没有照片，先上传几张吧。</view>
+      <view wx:for="{{albumPhotos}}" wx:key="id" class="album-item">
+        <image src="{{item.url}}" mode="aspectFill" class="album-thumb" />
+        <view class="album-meta">
+          <input class="input sm" placeholder="说明文字（可选）" value="{{item.caption}}" data-id="{{item.id}}" bindinput="onCaption" />
+          <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="removePhoto">删除</button>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <!-- ============ 缴费台账 ============ -->
+  <block wx:if="{{!loading && tab === 'bills'}}">
+    <view class="card">
+      <view class="card-title">缴费台账</view>
+      <view class="field-label">名称</view>
+      <input class="input" placeholder="如 电信宽带 500M" value="{{billName}}" bindinput="onBillName" />
+      <view class="field-label">金额（元）</view>
+      <input class="input" type="digit" placeholder="0.00" value="{{billAmount}}" bindinput="onBillAmount" />
+      <view class="field-label">周期</view>
+      <view class="seg-row">
+        <view class="seg {{billCycleKey === 'monthly' ? 'seg-active' : ''}}" data-cycle="monthly" bindtap="onBillCycle">月付</view>
+        <view class="seg {{billCycleKey === 'yearly' ? 'seg-active' : ''}}" data-cycle="yearly" bindtap="onBillCycle">年付</view>
+      </view>
+      <view class="field-label">下次应缴日期</view>
+      <picker mode="date" value="{{billNextDue}}" bindchange="onBillNextDue"><view class="picker">{{billNextDue}}</view></picker>
+      <view class="field-label">提前提醒天数</view>
+      <input class="input" type="number" placeholder="3" value="{{billRemindDays}}" bindinput="onBillRemind" />
+      <button class="btn btn-secondary btn-block" bindtap="addBill">添加账单</button>
+    </view>
+    <view wx:if="{{billView.length === 0}}" class="hint">还没有账单，先添加一条（电费、水费、燃气费、伙食费、宽带费、大模型费用等）。</view>
+    <view wx:for="{{billView}}" wx:key="id" class="list-item">
+      <view class="list-head">
+        <text class="card-title">{{item.category}} · {{item.name}}</text>
+        <text class="tag {{item.paid ? 'tag-ok' : 'tag-warn'}}">{{item.paidLabel}}</text>
+      </view>
+      <view class="list-content">¥{{item.amount}} · {{item.cycleLabel}} · 下次 {{item.nextDue}} · 提前 {{item.remindDays}} 天</view>
+      <view class="list-actions">
+        <button wx:if="{{!item.paid}}" class="btn btn-sm btn-primary" data-id="{{item.id}}" bindtap="payBill">一键核销</button>
+        <button wx:else class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="unpayBill">撤销</button>
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="removeBill">删除</button>
+      </view>
+    </view>
+    <view class="hint">「一键核销」记录本次缴费并顺延下次应缴日期；数据随双屏配置下发到设备。</view>
+  </block>
+
+  <!-- ============ 快递 / 取件码 ============ -->
+  <block wx:if="{{!loading && tab === 'express'}}">
+    <view class="card">
+      <view class="card-title">快递 / 取件码</view>
+      <view class="field-label">快递公司</view>
+      <picker mode="selector" range="{{expressCompanies}}" value="{{expCompanyIdx}}" bindchange="onExpCompany"><view class="picker">{{expressCompanies[expCompanyIdx]}}</view></picker>
+      <view class="field-label">取件码（主要填写）</view>
+      <input class="input" placeholder="驿站 / 柜号取件码" value="{{expPickupCode}}" bindinput="onExpPickupCode" />
+      <view class="field-label">驿站 / 柜号（选填）</view>
+      <input class="input" placeholder="如 菜鸟驿站 3 号柜" value="{{expPickupPoint}}" bindinput="onExpPickupPoint" />
+      <view class="field-label">物品（选填）</view>
+      <input class="input" placeholder="如 绘本 2 本" value="{{expItem}}" bindinput="onExpItem" />
+      <view class="field-label">运单号（可选，用于物流查询）</view>
+      <input class="input" placeholder="选填" value="{{expTrackingNo}}" bindinput="onExpTrackingNo" />
+      <button class="btn btn-secondary btn-block" bindtap="addExpress">添加快递</button>
+    </view>
+    <view wx:if="{{expressView.length === 0}}" class="hint">还没有包裹，添加取件码即可登记。</view>
+    <view wx:for="{{expressView}}" wx:key="id" class="list-item">
+      <view class="list-head">
+        <text class="card-title">{{item.pickupCode || item.trackingNo}} · {{item.company}}</text>
+        <text class="tag {{item.status === 'signed' ? 'tag-ok' : (item.status === 'exception' ? 'tag-warn' : '')}}">{{item.statusLabel}}</text>
+      </view>
+      <view wx:if="{{item.pickupPoint}}" class="list-content">{{item.pickupPoint}}</view>
+      <view wx:if="{{item.item}}" class="list-content">{{item.item}}</view>
+      <view class="field-label">状态</view>
+      <picker mode="selector" range="{{expressStatusLabels}}" value="{{item.statusIdx}}" data-id="{{item.id}}" bindchange="setExpStatus"><view class="picker">{{item.statusLabel}}</view></picker>
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="removeExpress">删除</button>
+      </view>
+    </view>
+    <view class="hint">家庭看板以取件码 / 取件点提醒为主；填写运单号可对接快递100 查询（需在系统配置填密钥）。</view>
+  </block>
+
+  <!-- ============ 家庭日程 ============ -->
+  <block wx:if="{{!loading && tab === 'schedule'}}">
+    <view class="card">
+      <view class="card-title">家庭日程</view>
+      <view class="page-sub">统一安排家庭成员的日程与提醒，变更同步到双屏。</view>
+      <view class="field-label">标题</view>
+      <input class="input" placeholder="如 周末去科技馆" value="{{evTitle}}" bindinput="onEvTitle" />
+      <view class="field-label">成员</view>
+      <picker mode="selector" range="{{memberOptions}}" value="{{evMemberIdx}}" bindchange="onEvMember"><view class="picker">{{memberOptions[evMemberIdx]}}</view></picker>
+      <view class="row-flex">
+        <view class="flex-col">
+          <view class="field-label">日期</view>
+          <picker mode="date" value="{{evDate}}" bindchange="onEvDate"><view class="picker">{{evDate}}</view></picker>
+        </view>
+        <view class="flex-col">
+          <view class="field-label">时间</view>
+          <picker mode="time" value="{{evTime}}" bindchange="onEvTime"><view class="picker">{{evTime}}</view></picker>
+        </view>
+      </view>
+      <view class="field-label">类型</view>
+      <picker mode="selector" range="{{familyCategories}}" value="{{evCategoryIdx}}" bindchange="onEvCategory"><view class="picker">{{familyCategories[evCategoryIdx]}}</view></picker>
+      <view class="field-label">重复</view>
+      <picker mode="selector" range="{{repeatOptions}}" value="{{evRepeatIdx}}" bindchange="onEvRepeat"><view class="picker">{{repeatOptions[evRepeatIdx]}}</view></picker>
+      <view class="field-label">提醒</view>
+      <picker mode="selector" range="{{reminderOptions}}" value="{{evReminderIdx}}" bindchange="onEvReminder"><view class="picker">{{reminderOptions[evReminderIdx]}}</view></picker>
+      <view class="field-label">备注</view>
+      <input class="input" placeholder="地点、物品或其他提醒" value="{{evNote}}" bindinput="onEvNote" />
+      <button class="btn btn-secondary btn-block" bindtap="addFamilyEvent">保存日程</button>
+    </view>
+    <view wx:if="{{familySchedule.length === 0}}" class="hint">还没有日程，从上面快速创建，家庭成员都能看到。</view>
+    <view wx:for="{{familySchedule}}" wx:key="id" class="list-item">
+      <view class="list-head">
+        <text class="card-title">{{item.title}}</text>
+        <text class="muted">{{item.date}} {{item.time}}</text>
+      </view>
+      <view class="list-content">{{item.member}} · {{item.category}}<text wx:if="{{item.note}}"> · {{item.note}}</text></view>
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" data-kind="schedule" bindtap="removeFamilyEvent">删除</button>
+      </view>
+    </view>
+  </block>
+
+  <!-- ============ 采购清单 ============ -->
+  <block wx:if="{{!loading && tab === 'shopping'}}">
+    <view class="card">
+      <view class="card-title">采购清单</view>
+      <view class="row-flex">
+        <input class="input" placeholder="采购项目" value="{{shopText}}" bindinput="onShopInput" />
+        <button class="btn btn-secondary btn-sm" bindtap="addShop">添加</button>
+      </view>
+      <view wx:if="{{familyShopping.length === 0}}" class="hint">清单为空。</view>
+      <view wx:for="{{familyShopping}}" wx:key="id" class="list-item">
+        <view class="list-head">
+          <text class="list-content {{item.done ? 'done' : ''}}">{{item.text}}</text>
+        </view>
+        <view class="list-actions">
+          <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="toggleShop">{{item.done ? '标为未买' : '标为已买'}}</button>
+          <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="removeShop">删除</button>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <!-- ============ 纪念日 ============ -->
+  <block wx:if="{{!loading && tab === 'anniversaries'}}">
+    <view class="card">
+      <view class="card-title">家庭纪念日</view>
+      <view class="page-sub">生日、结婚纪念日、重要日子，设备家庭看板自动提醒。</view>
+      <view class="field-label">标题</view>
+      <input class="input" placeholder="如 妈妈生日" value="{{evTitle}}" bindinput="onEvTitle" />
+      <view class="field-label">成员</view>
+      <picker mode="selector" range="{{memberOptions}}" value="{{evMemberIdx}}" bindchange="onEvMember"><view class="picker">{{memberOptions[evMemberIdx]}}</view></picker>
+      <view class="row-flex">
+        <view class="flex-col">
+          <view class="field-label">日期</view>
+          <picker mode="date" value="{{evDate}}" bindchange="onEvDate"><view class="picker">{{evDate}}</view></picker>
+        </view>
+        <view class="flex-col">
+          <view class="field-label">时间</view>
+          <picker mode="time" value="{{evTime}}" bindchange="onEvTime"><view class="picker">{{evTime}}</view></picker>
+        </view>
+      </view>
+      <view class="field-label">类型</view>
+      <picker mode="selector" range="{{familyCategories}}" value="{{evCategoryIdx}}" bindchange="onEvCategory"><view class="picker">{{familyCategories[evCategoryIdx]}}</view></picker>
+      <view class="field-label">重复</view>
+      <picker mode="selector" range="{{repeatOptions}}" value="{{evRepeatIdx}}" bindchange="onEvRepeat"><view class="picker">{{repeatOptions[evRepeatIdx]}}</view></picker>
+      <view class="field-label">提醒</view>
+      <picker mode="selector" range="{{reminderOptions}}" value="{{evReminderIdx}}" bindchange="onEvReminder"><view class="picker">{{reminderOptions[evReminderIdx]}}</view></picker>
+      <view class="field-label">备注</view>
+      <input class="input" placeholder="地点、物品或其他提醒" value="{{evNote}}" bindinput="onEvNote" />
+      <button class="btn btn-secondary btn-block" bindtap="addFamilyEvent">保存纪念日</button>
+    </view>
+    <view wx:if="{{familyAnniversaries.length === 0}}" class="hint">还没有纪念日，从上面快速创建。</view>
+    <view wx:for="{{familyAnniversaries}}" wx:key="id" class="list-item">
+      <view class="list-head">
+        <text class="card-title">{{item.title}}</text>
+        <text class="muted">{{item.date}} {{item.time}}</text>
+      </view>
+      <view class="list-content">{{item.member}} · {{item.category}}<text wx:if="{{item.note}}"> · {{item.note}}</text></view>
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" data-kind="anniversaries" bindtap="removeFamilyEvent">删除</button>
+      </view>
+    </view>
+  </block>
+
+  <view class="divider"></view>
+  <button class="btn btn-primary btn-block" bindtap="onSave" disabled="{{saving}}">保存并应用到设备</button>
+  <view class="hint">保存后会写入该设备的双屏配置，设备下次唤醒即拉取渲染；Web 后台看到的是同一份数据。</view>
+</view>

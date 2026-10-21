@@ -1,0 +1,64 @@
+<!-- 个人信息：大模型配置 + 孩子信息 -->
+<view class="container">
+  <view class="page-title">个人信息</view>
+  <view class="page-sub">大模型配置是作业图片识别（OCR）、AI 内容生成的统一 Key 来源。</view>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:if="{{!loading}}">
+    <view class="card">
+      <view class="card-title">大模型配置</view>
+      <view class="field-label">接入方式</view>
+      <picker mode="selector" range="{{accessLabels}}" value="{{accessIdx}}" bindchange="onAccess">
+        <view class="picker">{{accessLabels[accessIdx]}}</view>
+      </picker>
+
+      <block wx:if="{{accessIdx !== 0}}">
+        <view class="field-label">文本模型厂商</view>
+        <picker mode="selector" range="{{providerLabels}}" value="{{providerIdx}}" bindchange="onProvider">
+          <view class="picker">{{providerLabels[providerIdx]}}</view>
+        </picker>
+        <view class="field-label">文本模型</view>
+        <input class="input" placeholder="如 deepseek-chat" value="{{llm.model}}" bindinput="onModel" />
+        <block wx:if="{{accessIdx === 2}}">
+          <view class="field-label">自定义端点 base_url</view>
+          <input class="input" placeholder="https://..." value="{{llm.base_url}}" bindinput="onBaseUrl" />
+        </block>
+        <view class="field-label">API Key {{llm.llm_api_key_set ? '（已保存，留空保持不变）' : ''}}</view>
+        <input class="input" password placeholder="{{llm.llm_api_key_set ? '已保存，重新输入可覆盖' : 'sk-...'}}"
+               value="{{apiKey}}" bindinput="onApiKey" />
+      </block>
+
+      <view class="field-label">视觉模型厂商（OCR 使用）</view>
+      <picker mode="selector" range="{{imgLabels}}" value="{{imgIdx}}" bindchange="onImgProvider">
+        <view class="picker">{{imgLabels[imgIdx]}}</view>
+      </picker>
+      <view class="field-label">视觉模型</view>
+      <input class="input" placeholder="如 qwen-vl-max" value="{{llm.image_model}}" bindinput="onImgModel" />
+      <block wx:if="{{accessIdx !== 0}}">
+        <view class="field-label">视觉 API Key {{llm.image_api_key_set ? '（已保存，留空保持不变）' : ''}}</view>
+        <input class="input" password placeholder="{{llm.image_api_key_set ? '已保存，重新输入可覆盖' : 'sk-...'}}"
+               value="{{imgApiKey}}" bindinput="onImgApiKey" />
+      </block>
+
+      <button class="btn btn-primary btn-block" bindtap="onSaveLlm" disabled="{{saving}}">保存大模型配置</button>
+    </view>
+
+    <view class="card">
+      <view class="card-title">孩子信息</view>
+      <view class="field-label">姓名</view>
+      <input class="input" placeholder="孩子昵称 / 姓名" value="{{child.name}}" bindinput="onChildName" />
+      <view class="field-label">出生日期</view>
+      <picker mode="date" value="{{child.birth}}" bindchange="onChildBirth">
+        <view class="picker">{{child.birth || '请选择出生日期'}}</view>
+      </picker>
+      <view class="field-label">性别</view>
+      <input class="input" placeholder="不填 / 男 / 女" value="{{child.gender}}" bindinput="onChildGender" />
+      <view class="field-label">学校（选填）</view>
+      <input class="input" placeholder="如 某某实验小学" value="{{child.school}}" bindinput="onChildSchool" />
+      <view class="field-label">年级覆盖（选填，留空按出生日期推算）</view>
+      <input class="input" placeholder="如 小学三年级" value="{{child.grade_override}}" bindinput="onChildGrade" />
+      <button class="btn btn-primary btn-block" bindtap="onSaveChild" disabled="{{saving}}">保存孩子信息</button>
+    </view>
+  </block>
+</view>

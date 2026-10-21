@@ -1,0 +1,8 @@
+{
+  "name": "xiaowu-s3-operations-console",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {"dev": "next dev -p 8101", "build": "next build", "start": "next start -p 8101"},
+  "dependencies": {"next": "16.4.2", "react": "19.2.3", "react-dom": "19.2.3"},
+  "devDependencies": {"@types/node": "^20", "@types/react": "^19", "@types/react-dom": "^19", "typescript": "^5"}
+}

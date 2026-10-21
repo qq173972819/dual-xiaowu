@@ -1,0 +1,4 @@
+## IDF Component Manager 依赖
+## esp_codec_dev 内含 ES8311 驱动（es8311_codec_new）
+dependencies:
+  espressif/esp_codec_dev: "^1.3.4"

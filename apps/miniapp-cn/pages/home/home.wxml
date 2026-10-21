@@ -1,0 +1,123 @@
+<!-- 家长首页：功能总入口（对齐 dual 后台的侧边栏能力） -->
+<view class="container">
+  <view class="page-title">小悟AI墨水屏 · 管理台</view>
+  <view class="page-sub" wx:if="{{device}}">当前设备：{{device.name}} ｜ 学段：{{device.stage}}</view>
+  <view class="page-sub" wx:else>未选择设备</view>
+
+  <!-- 学屏内容 -->
+  <view class="section-label">学屏内容</view>
+
+  <view class="card" bindtap="goContent">
+    <view class="card-row">
+      <view>
+        <view class="card-title">📚 内容管理</view>
+        <view class="card-desc">课程表 / 便签 / 今日作业 / 阅读任务</view>
+      </view>
+      <view class="tag">去编辑</view>
+    </view>
+  </view>
+
+  <view class="card" bindtap="goScreens">
+    <view class="card-row">
+      <view>
+        <view class="card-title">🖥 双屏配置</view>
+        <view class="card-desc">A/B 屏内容来源、刷新频率、模块编排</view>
+      </view>
+      <view class="tag">去配置</view>
+    </view>
+  </view>
+
+  <view class="card" bindtap="goScenes">
+    <view class="card-row">
+      <view>
+        <view class="card-title">✨ 场景中心</view>
+        <view class="card-desc">家庭 / 学习 / 理财 / 办公 / 自定义</view>
+      </view>
+      <view class="tag">切换</view>
+    </view>
+  </view>
+
+  <!-- 推送 -->
+  <view class="section-label">推送</view>
+
+  <view class="card" bindtap="goHomework">
+    <view class="card-row">
+      <view>
+        <view class="card-title">📖 今日作业推送</view>
+        <view class="card-desc">粘贴 / 拍照识别，一键上屏 A 屏</view>
+      </view>
+      <view class="tag">去推送</view>
+    </view>
+  </view>
+
+  <view class="card" bindtap="goNote">
+    <view class="card-row">
+      <view>
+        <view class="card-title">📝 通知便签推送</view>
+        <view class="card-desc">临时通知、带物提醒，区分来源</view>
+      </view>
+      <view class="tag">去推送</view>
+    </view>
+  </view>
+
+  <view class="card" bindtap="goHistory">
+    <view class="card-row">
+      <view>
+        <view class="card-title">📜 推送历史记录</view>
+        <view class="card-desc">回看归档、复制复用</view>
+      </view>
+      <view class="tag">查看归档</view>
+    </view>
+  </view>
+
+  <!-- 账号与设置 -->
+  <view class="section-label">账号与设置</view>
+
+  <view class="card" bindtap="goMembers">
+    <view class="card-row">
+      <view>
+        <view class="card-title">👥 共享成员</view>
+        <view class="card-desc">邀请家人 / 同事共同维护设备</view>
+      </view>
+      <view class="tag">去管理</view>
+    </view>
+  </view>
+
+  <view class="card" bindtap="goProfile">
+    <view class="card-row">
+      <view>
+        <view class="card-title">👤 个人信息</view>
+        <view class="card-desc">大模型 Key、孩子信息、家庭位置</view>
+      </view>
+      <view class="tag">去设置</view>
+    </view>
+  </view>
+
+  <view class="card" bindtap="goSettings">
+    <view class="card-row">
+      <view>
+        <view class="card-title">⚙️ 系统配置</view>
+        <view class="card-desc">快递100 实时查询密钥</view>
+      </view>
+      <view class="tag">去配置</view>
+    </view>
+  </view>
+
+  <view class="card" bindtap="goTeacherAuth">
+    <view class="card-row">
+      <view>
+        <view class="card-title">🔑 老师授权</view>
+        <view class="card-desc">生成 / 冻结 6 位授权码</view>
+      </view>
+      <view class="tag">去管理</view>
+    </view>
+  </view>
+
+  <view class="divider"></view>
+
+  <button class="btn btn-primary btn-block" bindtap="onSync">立即同步 A 屏</button>
+  <view class="hint">提示：受墨水屏保护，5 分钟内仅可触发一次强制刷新。</view>
+
+  <button class="btn btn-ghost btn-block" bindtap="onSwitchDevice">回到设备选择</button>
+  <button class="btn btn-ghost btn-block" bindtap="onLogout">退出登录</button>
+</view>

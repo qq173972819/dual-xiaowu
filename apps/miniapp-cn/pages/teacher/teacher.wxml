@@ -1,0 +1,30 @@
+<!-- 老师专属推送面板（Page 7） -->
+<view class="container">
+  <view class="page-title">快捷推送</view>
+  <view class="page-sub" wx:if="{{teacher}}">学生：{{teacher.studentName}} ｜ 设备：{{teacher.deviceSn}}</view>
+
+  <view class="card" bindtap="goHomework">
+    <view class="card-row">
+      <view class="card-title">📖 布置今日作业</view>
+      <view class="tag">去布置</view>
+    </view>
+  </view>
+
+  <view class="card" bindtap="goNote">
+    <view class="card-row">
+      <view class="card-title">📝 下发通知便签</view>
+      <view class="tag">去下发</view>
+    </view>
+  </view>
+
+  <view class="divider"></view>
+
+  <button class="btn btn-primary btn-block" bindtap="onSync">立即同步 A 屏</button>
+  <view class="hint">限流提示：5 分钟仅一次强制刷新。</view>
+
+  <view class="hint" style="background:#F3F4F6">
+    老师权限边界：不可覆盖作业、不可设置持续便签、不可查看归档、不可切换设备。
+  </view>
+
+  <button class="btn btn-ghost btn-block" bindtap="onExit">退出授权登录</button>
+</view>

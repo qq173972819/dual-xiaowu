@@ -1,0 +1,34 @@
+<!-- 共享成员：邀请 / 列出 / 移除 -->
+<view class="container">
+  <view class="page-title">共享成员</view>
+  <view class="page-sub" wx:if="{{deviceName}}">当前设备：{{deviceName}}</view>
+  <view class="page-sub" wx:else>未选择设备</view>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:if="{{!loading}}">
+    <view class="card">
+      <view class="card-title">邀请成员</view>
+      <view class="page-sub">输入对方的 小悟AI 用户名，发送邀请后即可共同维护设备内容。</view>
+      <input class="input" placeholder="对方用户名" value="{{username}}" bindinput="onUsername" />
+      <button class="btn btn-primary btn-block" bindtap="share" disabled="{{busy}}">发送邀请</button>
+    </view>
+
+    <view class="card">
+      <view class="card-title">当前成员（{{members.length}}）</view>
+      <view wx:if="{{members.length === 0}}" class="page-sub">暂无成员</view>
+      <view wx:for="{{members}}" wx:key="userId" class="list-item">
+        <view class="list-head">
+          <text class="card-title">{{item.username}}</text>
+          <text class="tag {{item.role === 'owner' ? 'tag-ok' : ''}}">{{item.role === 'owner' ? '所有者' : '共享成员'}}</text>
+        </view>
+        <view class="list-actions">
+          <button wx:if="{{item.role !== 'owner'}}" class="btn btn-sm btn-secondary" data-uid="{{item.userId}}" data-name="{{item.username}}" data-role="{{item.role}}" bindtap="remove">移除</button>
+          <text wx:else class="muted">所有者不可移除</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view class="hint">提示：成员体系复用小悟AI 账号；设备绑定、解绑与权限仍由原登录账号的所有者权限控制。</view>
+</view>

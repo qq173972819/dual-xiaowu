@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>快速开始 · 森穹小悟</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="森穹小悟"><span>森穹小悟<small>XIAOWU AI · OPEN PLATFORM</small></span></a>
+    <button class="nav-toggle" aria-label="菜单" onclick="document.getElementById('nav').classList.toggle('open')">☰</button>
+    <nav class="nav" id="nav">
+      <a href="index.html">首页</a>
+      <a href="quickstart.html" class="active">快速开始</a>
+      <a href="hardware.html">硬件产品库</a>
+      <a href="dev.html">开发指南</a>
+      <a href="extensions.html">扩展与插件</a>
+      <a href="support.html">支持与帮助</a>
+      <a href="open-source.html">开源与开放程度</a>
+    </nav>
+    <a class="btn primary header-cta" href="http://127.0.0.1:8103" target="_blank" rel="noopener">登录内容后台</a>
+  </div>
+</header>
+
+<section class="hero">
+  <span class="kicker">GET STARTED</span>
+  <h1>快速开始</h1>
+  <p class="lead">按设备型号和购买批次选择正确入口，三步完成绑定与内容推送。刷写或升级前请再次核对设备型号与固件名称。</p>
+</section>
+
+<section class="section" id="choose">
+  <div class="sec-head"><div><span class="eyebrow">STEP 1</span><h2>选择设备与批次</h2></div></div>
+  <p class="sec-sub">不同型号屏幕特性与固件不同，固件不可混刷。</p>
+  <div class="grid">
+    <div class="card"><div class="ico">C3</div><h3>小悟 C3 单屏</h3><p>4.2 / 5.83 / 3.7 寸，支持双 / 三 / 四色屏，已量产。入门指南与基础固件见硬件产品库。</p></div>
+    <div class="card"><div class="ico">S3</div><h3>小悟 S3 双屏（在研）</h3><p>ESP32-S3 一体双屏：黑白信息屏 + 彩色图像屏，集成语音与 TF 卡，面向 AI 对话录音场景。</p></div>
+    <div class="card"><div class="ico">NFC</div><h3>NFC 无电池挂件</h3><p>1.54 寸四色，无需电池，靠近即刷，用于门牌、价签、提醒卡等。</p></div>
+  </div>
+</section>
+
+<section class="section" id="bind">
+  <div class="sec-head"><div><span class="eyebrow">STEP 2</span><h2>绑定与配网</h2></div></div>
+  <div class="prose">
+    <h3>用「小悟」微信小程序绑定</h3>
+    <p>打开小程序 → 登录或注册账号 → 点击「绑定设备」→ 扫描设备屏幕上的二维码，或手动输入屏幕显示的 <b>配对码</b>。绑定关系与账号体系共享，不会创建重复设备。</p>
+    <h3>配网方式</h3>
+    <p>设备开机进入配网模式（C3 长按 BOOT 键，S3 双屏长按 KEY− 键），手机连接设备热点后在小程序内完成 Wi-Fi 配置。配网过程「粘性」：未完成配网会持续回配网页，直至联网成功。</p>
+    <div class="callout">提示：S3 双屏重新配对使用 KEY+ 长按 3 秒；C3 解绑需在配网时长按 BOOT 键 5 秒进入入口模式。</div>
+  </div>
+</section>
+
+<section class="section" id="push">
+  <div class="sec-head"><div><span class="eyebrow">STEP 3</span><h2>推送内容</h2></div></div>
+  <div class="prose">
+    <h3>PC 内容后台（推荐）</h3>
+    <p>在浏览器打开内容后台，登录后进入「双屏配置 / 内容管理」，设置课程表、便签、作业、阅读任务与家庭日程，点击「应用到设备」即下发到所选设备，设备下次唤醒自动拉取渲染。</p>
+    <h3>微信小程序</h3>
+    <p>移动端同样可配置课程表、便签、作业与家庭内容，与 PC 后台读写同一份双屏配置，互不覆盖。</p>
+    <h3>老师免注册推送</h3>
+    <p>家长在「老师授权」中生成 6 位授权码发给老师，老师凭码即可在微信小程序 / 扫码推送便签或作业，授权码可设有效期并随时冻结。</p>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="col"><h4>森穹小悟</h4><a href="quickstart.html">快速开始</a><a href="hardware.html">硬件产品库</a><a href="dev.html">开发指南</a></div>
+    <div class="col"><h4>生态</h4><a href="extensions.html">扩展与插件</a><a href="open-source.html">开源与开放程度</a><a href="support.html">支持与帮助</a></div>
+    <div class="note"><p>森穹小悟 AI 体验中心 · 成都「极客谷」</p><p>公开产品文档，无需登录即可阅读。</p></div>
+  </div>
+</footer>
+<script src="assets/site.js"></script>
+</body>
+</html>

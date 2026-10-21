@@ -1,0 +1,29 @@
+<!-- 推送历史归档（Page 5，家长独有） -->
+<view class="container">
+  <view class="page-title">推送归档记录</view>
+  <view class="page-sub">时间倒序 · 可复制复用或删除</view>
+
+  <view class="segment">
+    <view class="segment-item {{filter==='all'?'active':''}}" bindtap="onFilter" data-f="all">全部</view>
+    <view class="segment-item {{filter==='homework'?'active':''}}" bindtap="onFilter" data-f="homework">今日作业</view>
+    <view class="segment-item {{filter==='note'?'active':''}}" bindtap="onFilter" data-f="note">通知便签</view>
+  </view>
+
+  <view wx:if="{{records.length===0}}" class="hint">暂无推送记录。</view>
+
+  <view wx:for="{{records}}" wx:key="id" class="list-item">
+    <view class="list-head">
+      <view>
+        <text class="muted">{{item.date}}</text>
+        <text wx:if="{{item.pushType==='homework'}}" class="tag" style="margin-left:12rpx;">今日作业</text>
+        <text wx:else class="tag" style="margin-left:12rpx;">通知便签</text>
+      </view>
+      <text class="muted">{{item.senderLabel}}</text>
+    </view>
+    <view class="list-content">{{item.content}}</view>
+    <view class="list-actions">
+      <button class="btn btn-secondary btn-sm" bindtap="onReuse" data-index="{{index}}">复制复用</button>
+      <button class="btn btn-ghost btn-sm" bindtap="onDelete" data-index="{{index}}">删除记录</button>
+    </view>
+  </view>
+</view>

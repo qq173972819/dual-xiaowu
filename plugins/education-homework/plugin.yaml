@@ -1,0 +1,1 @@
+{"id":"education-homework","name":"今日作业","version":"0.1.0","api_version":"v1","category":"education","requires":{"model":"xiaowu-s3-dual","screens":1},"optional":[],"permissions":["device.content.write"],"templates":["homework-list","vocabulary-card"],"maintainer":"community","risk":"minor-data","disclaimer":"本插件仅展示由学校或家长提供的信息，不替代教学管理系统。"}

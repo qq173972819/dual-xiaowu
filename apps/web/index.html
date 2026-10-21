@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>森穹小悟 · 产品文档与开放平台</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="森穹小悟"><span>森穹小悟<small>XIAOWU AI · OPEN PLATFORM</small></span></a>
+    <button class="nav-toggle" aria-label="菜单" onclick="document.getElementById('nav').classList.toggle('open')">☰</button>
+    <nav class="nav" id="nav">
+      <a href="index.html" class="active">首页</a>
+      <a href="quickstart.html">快速开始</a>
+      <a href="hardware.html">硬件产品库</a>
+      <a href="dev.html">开发指南</a>
+      <a href="extensions.html">扩展与插件</a>
+      <a href="support.html">支持与帮助</a>
+      <a href="open-source.html">开源与开放程度</a>
+    </nav>
+    <a class="btn primary header-cta" href="http://127.0.0.1:8103" target="_blank" rel="noopener">登录内容后台</a>
+  </div>
+</header>
+
+<section class="hero">
+  <span class="kicker">PRODUCT DOCS &amp; OPEN PLATFORM</span>
+  <h1>把重要的信息，安静地放在眼前。</h1>
+  <p class="lead">森穹小悟（XiaowuAI）是面向家庭与学习的 AI 电子墨水屏。这里汇集产品使用说明、硬件资料、固件与开发文档，以及社区开源资源。按设备型号或使用目的，快速找到对应内容。</p>
+  <div class="actions">
+    <a class="btn primary" href="quickstart.html">快速开始 →</a>
+    <a class="btn ghost" href="hardware.html">查看硬件产品库</a>
+  </div>
+  <div class="pill">● 请先确认设备型号：C3 系列为黑白/三色/四色单屏；S3 双屏为黑白信息屏 + 彩色图像屏，固件不可混刷。</div>
+</section>
+
+<section class="section" id="quickstart">
+  <div class="sec-head"><div><span class="eyebrow">GET STARTED</span><h2>快速开始</h2></div></div>
+  <p class="sec-sub">三步让墨水屏显示你的内容：选型号 → 绑定设备 → 推送内容。</p>
+  <div class="grid">
+    <a class="card link" href="quickstart.html#choose"><div class="ico">①</div><h3>选择设备与批次</h3><p>确认是 C3 单屏还是 S3 双屏，以及屏幕尺寸（4.2 / 5.83 / 3.7 寸），选对入门指南与固件。</p><span class="more">查看入口 →</span></a>
+    <a class="card link" href="quickstart.html#bind"><div class="ico">②</div><h3>绑定与配网</h3><p>用「小悟」微信小程序扫码或输入屏幕配对码完成绑定，蓝牙 / Wi-Fi 配网一步到位。</p><span class="more">绑定方法 →</span></a>
+    <a class="card link" href="quickstart.html#push"><div class="ico">③</div><h3>推送内容</h3><p>在 PC 内容后台或小程序里设置课程表、便签、作业与家庭日程，设备自动刷新。</p><span class="more">内容配置 →</span></a>
+  </div>
+</section>
+
+<section class="section" id="hardware">
+  <div class="sec-head"><div><span class="eyebrow">HARDWARE</span><h2>硬件产品库</h2></div><a class="more" href="hardware.html">全部产品 →</a></div>
+  <p class="sec-sub">从已量产的 C3 单屏到在研的 S3 一体双屏，全部规格与刷写说明集中在此。</p>
+  <div class="grid">
+    <a class="card link" href="hardware.html#c3"><div class="ico">C3</div><h3>小悟 C3 系列</h3><p>ESP32-C3 · 4.2 / 5.83 / 3.7 寸，支持双 / 三 / 四色屏，已量产。</p><span class="more">规格 →</span></a>
+    <a class="card link" href="hardware.html#nfc"><div class="ico">NFC</div><h3>NFC 无电池挂件</h3><p>1.54 寸四色，无需电池，靠近即刷，适合门牌、价签、提醒卡。</p><span class="more">规格 →</span></a>
+    <a class="card link" href="hardware.html#s3"><div class="ico">S3</div><h3>小悟 S3 双屏（在研）</h3><p>ESP32-S3 一体双屏：黑白信息屏 + 彩色图像屏，集成语音与 TF 卡。</p><span class="more">规格 →</span></a>
+  </div>
+</section>
+
+<section class="section" id="dev">
+  <div class="sec-head"><div><span class="eyebrow">DEVELOP</span><h2>软件开发指南</h2></div><a class="more" href="dev.html">全部文档 →</a></div>
+  <p class="sec-sub">官方固件、刷写步骤，以及设备 / 内容 / 推送开放接口。</p>
+  <div class="grid">
+    <a class="card link" href="dev.html#firmware"><div class="ico">⚙</div><h3>官方固件</h3><p>S3 双屏本地升级步骤，C3 固件获取、编译与烧录说明。</p><span class="more">说明 →</span></a>
+    <a class="card link" href="dev.html#api"><div class="ico">⟨⟩</div><h3>开放 API 文档</h3><p>设备认证、双屏内容配置下发、待办与屏幕内容推送接口。</p><span class="more">接口 →</span></a>
+    <a class="card link" href="dev.html#sdk"><div class="ico">◆</div><h3>小程序与 PC 后台</h3><p>「小悟」微信小程序与 PC 内容配置后台的接入与自托管。</p><span class="more">接入 →</span></a>
+  </div>
+</section>
+
+<section class="section" id="extensions">
+  <div class="sec-head"><div><span class="eyebrow">EXTEND</span><h2>扩展与插件</h2></div><a class="more" href="extensions.html">全部扩展 →</a></div>
+  <p class="sec-sub">社区与官方扩展：桌面客户端、日历同步、自动化与第三方固件。</p>
+  <div class="grid">
+    <a class="card link" href="extensions.html#miniapp"><div class="ico">◉</div><h3>微信小程序</h3><p>移动端内容配置入口，扫码绑定、课程表与便签推送。</p><span class="more">详情 →</span></a>
+    <a class="card link" href="extensions.html#pc"><div class="ico">▤</div><h3>PC 内容后台</h3><p>双屏 A/B 配置、课程表、家庭日程与老师授权管理。</p><span class="more">详情 →</span></a>
+    <a class="card link" href="extensions.html#community"><div class="ico">✦</div><h3>社区开源固件</h3><p>语音交互、单词机、家庭记账、墨笺等独立固件项目。</p><span class="more">浏览 →</span></a>
+  </div>
+</section>
+
+<section class="section" id="support">
+  <div class="sec-head"><div><span class="eyebrow">SUPPORT</span><h2>支持与帮助</h2></div><a class="more" href="support.html">全部帮助 →</a></div>
+  <div class="grid">
+    <a class="card link" href="support.html#faq"><div class="ico">?</div><h3>常见问题</h3><p>使用、开发、资费、互联兼容与硬件续航等高频问题。</p><span class="more">查看 →</span></a>
+    <a class="card link" href="support.html#features"><div class="ico">★</div><h3>功能说明</h3><p>页面切换、待机页、时钟天气、倒计时、番茄钟、NFC、轮播。</p><span class="more">了解 →</span></a>
+    <a class="card link" href="support.html#changelog"><div class="ico">↻</div><h3>更新日志</h3><p>各版本新增功能、行为变化、问题修复与体验优化。</p><span class="more">查看 →</span></a>
+  </div>
+</section>
+
+<section class="section" id="opensource">
+  <div class="sec-head"><div><span class="eyebrow">OPEN SOURCE &amp; ACCESS</span><h2>开源内容与开放程度</h2></div><a class="more" href="open-source.html">完整范围 →</a></div>
+  <p class="sec-sub">我们区分「完全公开」「登录可用」「内部管理」三层，下面是所有能力的开放程度一览。</p>
+  <div class="tiers">
+    <div class="tier open"><span class="tag">完全公开 · 无需登录</span><h3>公开文档与资料</h3><ul><li>本产品文档站全部内容</li><li>硬件规格与接口说明</li><li>开放 API 文档</li><li>刷写 / 编译指南</li></ul></div>
+    <div class="tier open"><span class="tag">开源 · 可获取</span><h3>开源内容</h3><ul><li>基础固件（GitHub）</li><li>平台接口定义</li><li>硬件原理图（部分）</li><li>结构文件（部分）</li></ul></div>
+    <div class="tier login"><span class="tag">登录后可用</span><h3>用户内容能力</h3><ul><li>设备绑定与双屏配置</li><li>课程表 / 便签 / 作业</li><li>家庭日程与共享成员</li><li>老师授权码</li></ul></div>
+    <div class="tier gated"><span class="tag">内部管理</span><h3>运营后台</h3><ul><li>全局设备与任务</li><li>内容模板与插件</li><li>开发者 App 与审计</li><li>仅限管理员密钥</li></ul></div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="col">
+      <h4>森穹小悟</h4>
+      <a href="quickstart.html">快速开始</a>
+      <a href="hardware.html">硬件产品库</a>
+      <a href="dev.html">开发指南</a>
+    </div>
+    <div class="col">
+      <h4>生态</h4>
+      <a href="extensions.html">扩展与插件</a>
+      <a href="open-source.html">开源与开放程度</a>
+      <a href="support.html">支持与帮助</a>
+    </div>
+    <div class="note">
+      <p>森穹小悟 AI 体验中心 · 成都「极客谷」</p>
+      <p>本站点为公开产品文档与开放平台说明，所有内容无需登录即可阅读。</p>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/site.js"></script>
+</body>
+</html>

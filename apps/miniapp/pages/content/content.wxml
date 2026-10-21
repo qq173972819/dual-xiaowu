@@ -1,0 +1,125 @@
+<!-- 内容管理：课程表 / 便签 / 今日作业 / 阅读任务 -->
+<view class="container">
+  <view class="page-title">内容管理</view>
+  <view class="page-sub" wx:if="{{deviceName}}">当前设备：{{deviceName}}</view>
+  <view class="page-sub" wx:else>未选择设备</view>
+
+  <view class="segment">
+    <view wx:for="{{tabs}}" wx:key="key"
+          class="segment-item {{tab === item.key ? 'active' : ''}}"
+          data-key="{{item.key}}" bindtap="onTab">{{item.label}}</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <!-- ============ 课程表 ============ -->
+  <block wx:if="{{!loading && tab === 'course' && ct}}">
+    <view class="card">
+      <view class="field-label">班级 / 课程表名称</view>
+      <input class="input" value="{{ct.class_name}}" placeholder="如 三年级二班" bindinput="onClassInput" />
+      <view class="field-label">学校（选填）</view>
+      <input class="input" value="{{ct.school}}" placeholder="如 某某实验小学" bindinput="onSchoolInput" />
+      <view class="field-label">显示天数</view>
+      <picker mode="selector" range="{{['周一至周五','全周（含周末）']}}" value="{{ct.show_days === 7 ? 1 : 0}}" bindchange="onShowDays">
+        <view class="picker">{{ct.show_days === 7 ? '全周（含周末）' : '周一至周五'}}</view>
+      </picker>
+    </view>
+
+    <view class="segment day-tabs">
+      <view wx:for="{{visibleDays}}" wx:key="*this"
+            class="segment-item {{curDay === item ? 'active' : ''}}"
+            data-idx="{{item}}" bindtap="onDay">{{dayLabels[item]}}</view>
+    </view>
+
+    <view class="card">
+      <view wx:for="{{ct.periods}}" wx:for-item="p" wx:for-index="pi" wx:key="start_hour" class="ct-row">
+        <view class="ct-time">第{{pi + 1}}节 {{p.start_hour}}:{{p.start_minute < 10 ? '0' : ''}}{{p.start_minute}}</view>
+        <view class="ct-inputs">
+          <input class="input sm" placeholder="课程" value="{{ct.grid[curDay][pi] ? ct.grid[curDay][pi].name : ''}}"
+                 data-day="{{curDay}}" data-period="{{pi}}" data-field="name" bindinput="onCellInput" />
+          <input class="input sm" placeholder="老师" value="{{ct.grid[curDay][pi] ? ct.grid[curDay][pi].teacher : ''}}"
+                 data-day="{{curDay}}" data-period="{{pi}}" data-field="teacher" bindinput="onCellInput" />
+          <input class="input sm" placeholder="教室" value="{{ct.grid[curDay][pi] ? ct.grid[curDay][pi].room : ''}}"
+                 data-day="{{curDay}}" data-period="{{pi}}" data-field="room" bindinput="onCellInput" />
+        </view>
+        <view class="ct-clear" data-day="{{curDay}}" data-period="{{pi}}" bindtap="clearCell">清空</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- ============ 便签 ============ -->
+  <block wx:if="{{!loading && tab === 'notes'}}">
+    <view class="card">
+      <view class="field-label">便签内容</view>
+      <textarea class="textarea" placeholder="如 明天带跳绳" value="{{noteText}}" bindinput="onNoteInput" />
+      <view class="field-label">来源</view>
+      <picker mode="selector" range="{{['家长备注','老师通知']}}" value="{{noteSender === '老师' ? 1 : 0}}" bindchange="onNoteSender">
+        <view class="picker">{{noteSender === '老师' ? '老师通知' : '家长备注'}}</view>
+      </picker>
+      <view class="field-label">展示策略</view>
+      <picker mode="selector" range="{{['当日消失','持续展示']}}" value="{{notePersistent ? 1 : 0}}" bindchange="onNotePersistent">
+        <view class="picker">{{notePersistent ? '持续展示' : '当日消失'}}</view>
+      </picker>
+      <button class="btn btn-secondary btn-block" bindtap="addNote">添加便签</button>
+    </view>
+
+    <view wx:if="{{notes.length === 0}}" class="hint">还没有便签。</view>
+    <view wx:for="{{notes}}" wx:key="id" class="list-item">
+      <view class="list-head">
+        <text class="tag {{item.sender_type === 'teacher' ? 'tag-warn' : 'tag-ok'}}">{{item.sender}}</text>
+        <text class="muted">{{item.date}}{{item.persistent ? ' · 持续' : ''}}</text>
+      </view>
+      <view class="list-content">{{item.text}}</view>
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="removeNote">删除</button>
+      </view>
+    </view>
+  </block>
+
+  <!-- ============ 今日作业 ============ -->
+  <block wx:if="{{!loading && tab === 'homework'}}">
+    <view class="card">
+      <view class="field-label">作业内容</view>
+      <textarea class="textarea" placeholder="如 语文：背诵第 5 课" value="{{hwText}}" bindinput="onHwInput" />
+      <button class="btn btn-secondary btn-block" bindtap="addHomework">添加作业</button>
+    </view>
+
+    <view wx:if="{{homework.length === 0}}" class="hint">还没有作业。</view>
+    <view wx:for="{{homework}}" wx:key="id" class="list-item">
+      <view class="list-head">
+        <text class="list-content {{item.done ? 'done' : ''}}">{{item.text}}</text>
+        <text class="tag {{item.done ? 'tag-ok' : ''}}">{{item.done ? '已完成' : '待完成'}}</text>
+      </view>
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="toggleHomework">{{item.done ? '标为未完成' : '标为完成'}}</button>
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="removeHomework">删除</button>
+      </view>
+    </view>
+  </block>
+
+  <!-- ============ 阅读任务 ============ -->
+  <block wx:if="{{!loading && tab === 'reading'}}">
+    <view class="card">
+      <view class="field-label">书名</view>
+      <input class="input" placeholder="如 城南旧事" value="{{readTitle}}" bindinput="onReadTitle" />
+      <view class="field-label">进度</view>
+      <input class="input" placeholder="如 第 3 章 / 共 10 章" value="{{readProgress}}" bindinput="onReadProgress" />
+      <button class="btn btn-secondary btn-block" bindtap="addReading">添加阅读任务</button>
+    </view>
+
+    <view wx:if="{{reading.length === 0}}" class="hint">还没有阅读任务。</view>
+    <view wx:for="{{reading}}" wx:key="id" class="list-item">
+      <view class="list-head">
+        <text class="card-title">{{item.title}}</text>
+      </view>
+      <input class="input sm" placeholder="进度" value="{{item.progress}}" data-id="{{item.id}}" bindinput="onReadProgressInput" />
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" bindtap="removeReading">删除</button>
+      </view>
+    </view>
+  </block>
+
+  <view class="divider"></view>
+  <button class="btn btn-primary btn-block" bindtap="onSave" disabled="{{saving}}">保存并应用到设备</button>
+  <view class="hint">保存后会写入该设备的双屏配置，设备下次唤醒即拉取渲染；Web 后台看到的是同一份数据。</view>
+</view>

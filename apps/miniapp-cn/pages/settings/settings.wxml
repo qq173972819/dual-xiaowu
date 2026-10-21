@@ -1,0 +1,40 @@
+<!-- 系统配置：快递100 实时查询密钥 -->
+<view class="container">
+  <view class="page-title">系统配置</view>
+  <view class="page-sub">原本写在后端 .env 并需重启的密钥，现在可在后台直接填写：DB 中的值优先于环境变量。</view>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:if="{{!loading}}">
+    <view class="card">
+      <view class="card-row">
+        <text class="card-title">快递100 实时查询密钥</text>
+        <text class="tag {{expressConfigured ? 'tag-ok' : 'tag-off'}}">{{expressConfigured ? '已可用' : '未配置'}}</text>
+      </view>
+      <view class="card-desc">「快递查询」中的实时物流依赖此密钥。来自 .env 的已有配置也会显示，状态见「来源」。</view>
+
+      <block wx:for="{{items}}" wx:key="key">
+        <view class="field-label">{{item.label}}</view>
+        <view class="ct-inputs">
+          <input class="input sm"
+                 password="{{item.secret && !reveal[item.key]}}"
+                 placeholder="{{item.configured ? '已保存，留空保持不变' : item.placeholder}}"
+                 value="{{drafts[item.key] || ''}}"
+                 data-key="{{item.key}}" bindinput="onInput" />
+          <view wx:if="{{item.secret}}" class="ct-clear" data-key="{{item.key}}" bindtap="onToggleReveal">
+            {{reveal[item.key] ? '隐藏' : '显示'}}
+          </view>
+        </view>
+        <view class="card-desc">
+          <text wx:if="{{item.configured}}">当前：{{item.masked}} · 来源 {{item.source === 'db' ? '后台' : '.env'}}</text>
+          <text wx:else>尚未配置</text>
+        </view>
+        <view class="card-desc">{{item.hint}}</view>
+      </block>
+
+      <button class="btn btn-primary btn-block" bindtap="onSave" disabled="{{saving}}">保存系统配置</button>
+    </view>
+  </block>
+
+  <view class="hint">保存后立即生效，无需重启后端服务；留空的字段保持原值不变。</view>
+</view>

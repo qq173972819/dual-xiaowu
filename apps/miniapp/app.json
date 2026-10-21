@@ -1,0 +1,29 @@
+{
+  "pages": [
+    "pages/splash/splash",
+    "pages/device/device",
+    "pages/home/home",
+    "pages/push-homework/push-homework",
+    "pages/push-note/push-note",
+    "pages/history/history",
+    "pages/auth/auth",
+    "pages/teacher/teacher",
+    "pages/content/content",
+    "pages/scenes/scenes",
+    "pages/screens/screens",
+    "pages/profile/profile",
+    "pages/settings/settings",
+    "pages/teacher-auth/teacher-auth"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#f3f0e7",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "小悟AI墨水屏",
+    "backgroundColor": "#f3f0e7",
+    "backgroundTextStyle": "dark",
+    "enablePullDownRefresh": false
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}
