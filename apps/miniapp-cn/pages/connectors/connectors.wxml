@@ -1,0 +1,57 @@
+<!-- 连接器绑定页：平台级「无需绑定」 + 用户级「去授权」引导 -->
+<view class="container">
+  <view class="page-title">连接器</view>
+  <view class="page-sub">第三方账号一键绑定。平台级能力开箱即用；用户级连接器需授权一次，凭据加密保存在平台，可随时解除。</view>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:if="{{!loading}}">
+    <view wx:for="{{items}}" wx:key="id" class="card">
+      <view class="card-row">
+        <view class="grow">
+          <view class="title-line">
+            <text class="card-title">{{item.name}}</text>
+            <text class="tag {{item.type === 'platform' ? 'tag-ok' : ''}}">{{item.typeLabel}}</text>
+          </view>
+          <view class="card-desc">{{item.description}}</view>
+        </view>
+        <view class="action-col">
+          <block wx:if="{{item.status === 'included'}}">
+            <view class="status-chip ok">无需绑定，已开通</view>
+          </block>
+          <block wx:elif="{{item.status === 'bound'}}">
+            <view class="status-chip ok">已绑定{{item.external_account ? ' · ' + item.external_account : ''}}</view>
+            <button class="btn btn-sm btn-secondary danger" data-id="{{item.id}}" bindtap="onUnbind">解除绑定</button>
+          </block>
+          <block wx:else>
+            <button class="btn btn-sm btn-primary" data-id="{{item.id}}" bindtap="onTapAuthorize"
+                    disabled="{{authorizing}}">{{authorizing ? '跳转中…' : '去授权'}}</button>
+          </block>
+        </view>
+      </view>
+
+      <block wx:if="{{item.status === 'unbound' && item.guide.length}}">
+        <view class="guide">
+          <view class="guide-title">授权指引</view>
+          <view wx:for="{{item.guide}}" wx:for-item="step" wx:for-index="idx" wx:key="*this" class="guide-step">
+            <text class="step-no">{{idx + 1}}</text><text class="step-text">{{step}}</text>
+          </view>
+        </view>
+      </block>
+    </view>
+
+    <view class="hint">用户级连接器的凭据经加密保存在平台服务端，不会下发到设备；解除绑定后凭据立即删除。</view>
+  </block>
+
+  <!-- 授权引导弹层 -->
+  <view wx:if="{{guideFor}}" class="mask" bindtap="onCloseGuide">
+    <view class="sheet" catchtap="">
+      <view class="sheet-title">完成授权</view>
+      <view class="sheet-text">1. 点击下方按钮复制授权链接；</view>
+      <view class="sheet-text">2. 在手机或电脑浏览器打开该链接并确认授权；</view>
+      <view class="sheet-text">3. 授权完成后回到本页下拉刷新，状态将变为「已绑定」。</view>
+      <button class="btn btn-primary btn-block" bindtap="onCopyLink">复制授权链接</button>
+      <button class="btn btn-secondary btn-block" bindtap="onCloseGuide">完成，返回刷新</button>
+    </view>
+  </view>
+</view>

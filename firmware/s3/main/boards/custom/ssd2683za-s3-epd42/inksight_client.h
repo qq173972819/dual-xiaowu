@@ -43,7 +43,9 @@ public:
                      uint8_t* dst,
                      std::string& error,
                      int* server_refresh_minutes = nullptr,
-                     int battery_percent = -1);  // >=0 时附加 &bat=xx 供后端绘制电量
+                     int battery_percent = -1,  // >=0 时附加 &bat=xx 供后端绘制电量
+                     bool* device_unbound_out = nullptr,
+                     std::string* pair_code_out = nullptr);
 
     // 2bpp 彩色模式（FPC2 彩色屏 SSD2683ZA 用）：请求 bpp=2&colors=4，后端返回
     // application/octet-stream 的原始 2bpp 打包数据（尺寸 = FPC2 屏幕尺寸，
@@ -87,7 +89,22 @@ public:
                            const std::string& device_id,
                            std::string* error);
 
+    // 语音端/本机改 B 屏 K 线标的：query 可为 6 位代码或股票名称（如
+    // "688018" / "乐鑫科技"）。后端解析后写入设备配置并置位立即刷新。
+    // 成功时 name_out 回填证券名称。
+    static bool SetFinanceKline(NetworkInterface* network,
+                                const std::string& server,
+                                const std::string& device_id,
+                                const std::string& query,
+                                std::string* name_out,
+                                std::string* error);
+
     // NVS 读写服务器地址（命名空间 inksight / key "server_url"）。
     static std::string LoadServerUrl();
     static void SaveServerUrl(const std::string& server);
+
+    // 后端在下发渲染结果时若带 X-Pending-Refresh: 1（内容后台点了
+    // 「应用到设备」），取图时会置位此标记。刷新循环每分钟调用一次
+    // TakePendingRefresh()，返回 true 表示立即刷一次双屏。
+    static bool TakePendingRefresh();
 };

@@ -1,7 +1,7 @@
-<!-- 老师授权管理 -->
+<!-- 邀请老师（仅学习场景，由家长在共享成员页发起） -->
 <view class="container">
-  <view class="page-title">老师授权</view>
-  <view class="page-sub">生成授权码发给老师，老师凭码免注册进入小程序推送作业与便签。</view>
+  <view class="page-title">邀请老师</view>
+  <view class="page-sub">仅用于学习场景：由家长生成 6 位授权码发给老师，老师凭码免注册进入小程序推送作业与便签；可随时冻结或设有效期。</view>
 
   <view wx:if="{{loading}}" class="hint">加载中…</view>
 

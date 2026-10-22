@@ -27,7 +27,7 @@ Page({
   goScreens() { wx.navigateTo({ url: '/pages/screens/screens' }); },
   goProfile() { wx.navigateTo({ url: '/pages/profile/profile' }); },
   goSettings() { wx.navigateTo({ url: '/pages/settings/settings' }); },
-  goTeacherAuth() { wx.navigateTo({ url: '/pages/teacher-auth/teacher-auth' }); },
+  goConnectors() { wx.navigateTo({ url: '/pages/connectors/connectors' }); },
   goMembers() { wx.navigateTo({ url: '/pages/members/members' }); },
 
   // 立即同步 A 屏（5 分钟限流）

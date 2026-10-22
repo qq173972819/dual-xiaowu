@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell, BookOpen, CalendarDays, Check, ChevronDown, CircleUserRound, Cloud, CloudRain, CloudSnow, CloudSun, Sun, Code2, Cpu,   Home,
-  History, KeyRound, LayoutDashboard, Link2, ListChecks, LoaderCircle, LogOut, MonitorCog, MoreHorizontal,
-  NotebookPen, Plus, RefreshCw, Save, ScanText, Settings2, ShieldCheck, Sparkles, StickyNote, Trash2, UserCog, Users,
+  AudioLines, History, KeyRound, LayoutDashboard, Link2, ListChecks, LoaderCircle, LogOut, MessageSquare, Mic, MonitorCog, MoreHorizontal,
+  NotebookPen, Play, Plus, RefreshCw, Save, ScanText, Settings2, ShieldCheck, Sparkles, Square, StickyNote, Trash2, UserCog, Users,
   Image as ImageIcon,
   WalletCards, Truck, Wifi, X,
+  Coins, TrendingUp,
 } from "lucide-react";
-import { api, clearToken, getToken, setToken } from "@/lib/api";
+import { api, authHeaders, clearToken, getToken, setToken } from "@/lib/api";
 
 type SceneKey = "family" | "study" | "finance" | "health" | "office" | "custom";
-type NavKey = "dashboard" | "scenes" | "screens" | "content" | "devices" | "members" | "auth" | "profile" | "settings";
+type NavKey = "dashboard" | "scenes" | "screens" | "content" | "financeStocks" | "devices" | "members" | "auth" | "profile" | "connectors" | "settings";
 type ScreenConfig = { title: string; source: string; refresh: string; modules: string[]; mode?: string };
-type DualWeatherPreview = { city: string; today_temp: string; current_temp?: string; today_desc: string; today_code?: number; today_low: string; today_high: string; today_humidity?: string; today_wind_dir?: string; today_wind_level?: string; sunrise?: string; sunset?: string; advice?: string; forecast?: { day: string; date: string; temp_range: string; desc: string; code?: number }[]; feels_like?: string | number | null };
+type DualWeatherPreview = { city: string; today_temp: string; current_temp?: string; today_desc: string; today_code?: number; today_low: string; today_high: string; today_humidity?: string; today_wind_dir?: string; today_wind_level?: string; sunrise?: string; sunset?: string; advice?: string; forecast?: { day: string; date: string; temp_range: string; desc: string; code?: number }[]; feels_like?: string | number | null; city_pinyin?: string; solar_term?: string; solar_term_day?: string; updated_at?: string; lunar_date?: string; lunar_year?: string; lunar_zodiac?: string; plate_limit?: string };
 type Scene = { name: string; eyebrow: string; desc: string; icon: string; a: ScreenConfig; b: ScreenConfig };
 type User = { user_id: number; username: string };
 type Device = { mac: string; nickname?: string; role?: string; status?: string; is_online?: boolean; last_seen?: string };
@@ -58,7 +59,7 @@ const navItems: { key: NavKey; label: string; icon: typeof Home }[] = [
   { key: "content", label: "内容管理", icon: NotebookPen },
   { key: "devices", label: "设备管理", icon: Cpu },
   { key: "members", label: "共享成员", icon: Users },
-  { key: "auth", label: "老师授权", icon: KeyRound },
+  { key: "connectors", label: "连接器", icon: Link2 },
   { key: "profile", label: "个人信息", icon: UserCog },
   { key: "settings", label: "系统配置", icon: Settings2 },
 ];
@@ -185,7 +186,7 @@ export default function DualConsole() {
     clearToken(); setUser(null); setDevices([]); setDeviceMac(""); notify("已退出登录");
   }
 
-  const title = { dashboard: "设备总览", scenes: "场景中心", screens: "双屏配置", content: "内容管理", devices: "设备管理", members: "共享成员", auth: "老师授权", profile: "个人信息", settings: "系统配置" }[nav];
+  const title = { dashboard: "设备总览", scenes: "场景中心", screens: "双屏配置", content: "内容管理", financeStocks: "理财自选", devices: "设备管理", members: "共享成员", auth: "邀请老师", connectors: "连接器", profile: "个人信息", settings: "系统配置" }[nav];
 
   return (
     <div className="shell">
@@ -221,11 +222,13 @@ export default function DualConsole() {
           {!loading && nav === "dashboard" ? <Dashboard user={user} devices={devices} sceneKey={sceneKey} selectedDevice={selectedDevice} setNav={setNav} openAuth={() => setAuthOpen(true)} openPair={() => setPairOpen(true)} /> : null}
           {!loading && nav === "scenes" ? <SceneCenter selected={sceneKey} choose={chooseScene} openConfig={() => setNav("screens")} /> : null}
           {!loading && nav === "screens" ? <ScreenEditor scene={scene} sceneKey={sceneKey} value={config[sceneKey]} update={updateScreen} save={saveConfiguration} savedAt={savedAt} content={content} apply={applyToDevice} hasDevice={!!selectedDevice} deviceMac={selectedDevice?.mac || ""} screen={screen} setScreen={setScreen} /> : null}
-          {!loading && nav === "content" ? <ContentStudio content={content} setContent={setContent} save={saveConfiguration} savedAt={savedAt} notify={notify} apply={applyToDevice} hasDevice={!!selectedDevice} deviceMac={selectedDevice?.mac || ""} screen={screen} sceneKey={sceneKey} aMode={config[sceneKey].a.mode || "notes"} bMode={config[sceneKey].b.mode || "course"} /> : null}
+          {!loading && nav === "content" ? <ContentStudio content={content} setContent={setContent} save={saveConfiguration} savedAt={savedAt} notify={notify} apply={applyToDevice} hasDevice={!!selectedDevice} deviceMac={selectedDevice?.mac || ""} screen={screen} sceneKey={sceneKey} aMode={config[sceneKey].a.mode || "notes"} bMode={config[sceneKey].b.mode || "course"} user={user} device={selectedDevice} /> : null}
+          {!loading && nav === "financeStocks" ? <FinanceWatchlist user={user} notify={notify} device={selectedDevice} /> : null}
           {!loading && nav === "devices" ? <DeviceManager devices={devices} user={user} refresh={loadDevices} openAuth={() => setAuthOpen(true)} openPair={() => setPairOpen(true)} notify={notify} choose={(mac) => { setDeviceMac(mac); setNav("screens"); }} /> : null}
-          {!loading && nav === "members" ? <MembersPanel device={selectedDevice} user={user} notify={notify} /> : null}
-          {!loading && nav === "auth" ? <TeacherAuthPanel device={selectedDevice} user={user} notify={notify} /> : null}
+          {!loading && nav === "members" ? <MembersPanel device={selectedDevice} user={user} notify={notify} setNav={setNav} /> : null}
+          {!loading && nav === "auth" ? <TeacherAuthPanel device={selectedDevice} user={user} notify={notify} setNav={setNav} /> : null}
           {!loading && nav === "profile" ? <ProfilePanel user={user} notify={notify} content={content} setContent={setContent} save={saveConfiguration} apply={applyToDevice} hasDevice={!!selectedDevice} /> : null}
+          {!loading && nav === "connectors" ? <ConnectorsPanel user={user} notify={notify} /> : null}
           {!loading && nav === "settings" ? <ServiceConfigPanel user={user} notify={notify} /> : null}
         </div>
       </main>
@@ -259,6 +262,408 @@ function Stat({ icon, label, value, note }: { icon: React.ReactNode; label: stri
   return <div className="stat"><div className="stat-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small>{note}</small></div></div>;
 }
 
+type WatchItem = { code: string; name: string };
+type FinanceQuote = { code: string; name: string; price: number | null; pct: number | null; chg: number | null };
+
+function FinanceWatchlist({ user, notify, device, embedded }: { user: User | null; notify: (m: string) => void; device?: Device; embedded?: boolean }) {
+  const [items, setItems] = useState<WatchItem[]>([]);
+  const [input, setInput] = useState("");
+  const [quotes, setQuotes] = useState<FinanceQuote[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [klineCode, setKlineCode] = useState("");
+  const [klineTs, setKlineTs] = useState(0);
+  const [klineErr, setKlineErr] = useState("");
+
+  useEffect(() => { if (user) void reload(); }, [user]);
+
+  async function reload() {
+    try {
+      const r = await api<{ watchlist: WatchItem[] }>("/api/finance/watchlist");
+      const list = r.watchlist || [];
+      setItems(list);
+      if (list.length) await loadQuotes(list.map((x) => x.code));
+      else setQuotes([]);
+      setKlineCode((cur) => (list.some((x) => x.code === cur) ? cur : list[0]?.code || ""));
+    } catch (e) { notify((e as Error).message); }
+  }
+
+  async function loadQuotes(codes: string[]) {
+    try {
+      const r = await api<{ quotes: FinanceQuote[] }>(`/api/finance/quote?codes=${encodeURIComponent(codes.join(","))}`);
+      setQuotes(r.quotes || []);
+    } catch { setQuotes([]); }
+  }
+
+  async function save() {
+    const codes = input.split(/[\s,，;；]+/).map((s) => s.trim()).filter(Boolean);
+    if (!codes.length) { notify("请输入股票代码，如 600519 000001"); return; }
+    setBusy(true);
+    try {
+      await api("/api/finance/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codes }) });
+      setInput("");
+      await reload();
+      notify("自选股已保存（可点击代码查看 K 线预览）");
+    } catch (e) { notify((e as Error).message); } finally { setBusy(false); }
+  }
+
+  async function removeItem(code: string) {
+    try {
+      await api(`/api/finance/watchlist/${encodeURIComponent(code)}`, { method: "DELETE" });
+      await reload();
+      notify(`已移除 ${code}`);
+    } catch (e) { notify((e as Error).message); }
+  }
+
+  async function applyToDevice() {
+    if (!device) { notify("请先在右上角选择已绑定的设备"); return; }
+    try {
+      const r = await api<{ count?: number; message?: string }>("/api/finance/watchlist/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mac: device.mac }) });
+      notify(r.message || `已写入设备（${r.count || 0} 只自选）`);
+    } catch (e) { notify((e as Error).message); }
+  }
+
+  function showKline(code: string) {
+    setKlineCode(code);
+    setKlineErr("");
+    setKlineTs(Date.now());
+  }
+
+  const quoteByName = new Map(quotes.map((q) => [q.code, q]));
+  const klineSrc = klineCode ? `/api/finance/kline/image?code=${encodeURIComponent(klineCode)}&days=60&w=400&h=300&colors=4&t=${klineTs}` : "";
+
+  if (!user) return <EmptyState icon={<TrendingUp />} title="登录后管理理财自选" text="自选股按账号保存，可一键写入设备双屏。" action="请先登录" onAction={() => notify("请从右上角登录")} />;
+  return <>
+    {embedded ? null : <div className="page-intro row"><div><span className="kicker">FINANCE WATCHLIST</span><h2>理财自选 · 从看盘到墨水屏</h2><p>把同花顺等看盘软件里的自选股代码粘贴进来，行情与日 K 由平台数据链路渲染后投屏。最多 8 只。</p></div>
+      <div className="save-state">{device ? <>设备：{device.nickname || device.mac}</> : "未选择设备"}</div></div>}
+
+    <div className="section-heading"><div><span>第一步</span><h3>添加自选股</h3></div></div>
+    <div className="fin-input-row">
+      <textarea className="fin-textarea" rows={2} placeholder="输入 6 位证券代码，支持批量与 sh/sz 前缀：600519 000001 300750 sh000001" value={input} onChange={(e) => setInput(e.target.value)} />
+      <div className="fin-input-actions">
+        <button className="button primary" disabled={busy} onClick={save}><Plus size={16}/>保存自选</button>
+        <button className="button light" onClick={() => loadQuotes(items.map((x) => x.code))}><RefreshCw size={16}/>刷新行情</button>
+      </div>
+    </div>
+
+    <div className="section-heading"><div><span>第二步</span><h3>行情与 K 线预览</h3></div><button className="button primary" disabled={!items.length} onClick={applyToDevice}><Check size={16}/>应用到设备（{device ? device.nickname || device.mac : "未选设备"}）</button></div>
+    {!items.length ? <EmptyState icon={<TrendingUp />} title="还没有自选股" text="粘贴代码保存后，这里会显示实时行情与日 K 预览。" action="" onAction={() => {}} /> : (
+      <div className="fin-grid">
+        <table className="fin-table">
+          <thead><tr><th>股票</th><th>现价</th><th>涨跌幅</th><th>K线</th><th></th></tr></thead>
+          <tbody>
+            {items.map((it) => {
+              const q = quoteByName.get(it.code.slice(-6));
+              return <tr key={it.code} className={klineCode === it.code ? "active" : ""}>
+                <td><b>{it.name || it.code}</b><small>{it.code}</small></td>
+                <td>{q?.price != null ? q.price.toFixed(2) : "--"}</td>
+                <td className={q?.pct != null ? (q.pct >= 0 ? "up" : "down") : ""}>{q?.pct != null ? `${q.pct >= 0 ? "▲" : "▼"}${Math.abs(q.pct).toFixed(2)}%` : "--"}</td>
+                <td><button className="text-button" onClick={() => showKline(it.code)}>查看</button></td>
+                <td><button aria-label={`移除 ${it.code}`} onClick={() => removeItem(it.code)}><X size={14}/></button></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        <div className="fin-kline">
+          {klineSrc ? <img src={klineSrc} alt={`${klineCode} 日 K 预览`} onError={() => setKlineErr("K 线获取失败，请稍后重试")} /> : <div className="fin-kline-empty">点击左侧「查看」预览日 K</div>}
+          {klineErr ? <p className="fin-kline-err">{klineErr}</p> : null}
+          {klineCode ? <small>日 K · 近 60 交易日 · {quoteByName.get(klineCode.slice(-6))?.name || klineCode} · 与 B 屏渲染同源</small> : null}
+        </div>
+      </div>
+    )}
+    <p className="tt-hint">数据源：腾讯公开行情接口（原型）。墨水屏为低频刷新介质：A 屏显示自选价格与涨跌幅，B 屏渲染首只自选的日 K 蜡烛图（红涨黑跌，黑白屏空心/实心）。商用化将切换持牌数据商。</p>
+  </>;
+}
+
+type RecoItem = { code: string; name: string; price: number | null; pct: number | null; reason: string };
+
+const GOLD_NAME_MAP: Record<string, string> = { aum: "沪金主连", agm: "沪银主连", GC00Y: "COMEX黄金", AUTD: "黄金T+D", jm: "焦炭主连" };
+
+function GoldFuturesPanel({ notify }: { notify: (m: string) => void }) {
+  const [items, setItems] = useState<Array<{ code: string; name: string; price: number | null; pct: number | null; chg: number | null }>>([]);
+  const [updatedAt, setUpdatedAt] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ items: typeof items; updated_at?: string }>("/api/finance/gold");
+      setItems((r.items || []).map((x) => ({ ...x, name: x.name || GOLD_NAME_MAP[x.code] || x.code })));
+      setUpdatedAt(r.updated_at || "");
+    } catch (e) { notify((e as Error).message); } finally { setBusy(false); }
+  }, [notify]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  return <>
+    <div className="page-intro row"><div><span className="kicker">GOLD &amp; FUTURES</span><h2>黄金 / 期货 · 避险与商品行情</h2><p>贵金属与商品期货主连合约实时快照，红涨绿跌。可作为 A 屏「黄金/期货」模式的设备数据源。</p></div>
+      <div className="save-state">{updatedAt ? `更新于 ${new Date(updatedAt).toLocaleTimeString("zh-CN", { hour12: false })}` : "未加载"}</div></div>
+    <div className="fin-input-actions" style={{ marginBottom: 12 }}>
+      <button className="button light" disabled={busy} onClick={() => void load()}><RefreshCw size={16} />刷新行情</button>
+    </div>
+    {!items.length ? <div className="tt-empty">暂无行情数据，点击「刷新行情」重试。</div> : (
+      <table className="fin-table">
+        <thead><tr><th>品种</th><th>最新价</th><th>涨跌额</th><th>涨跌幅</th></tr></thead>
+        <tbody>
+          {items.map((q) => <tr key={q.code}>
+            <td><b>{q.name}</b><small>{q.code}</small></td>
+            <td>{q.price != null ? q.price.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) : "--"}</td>
+            <td className={q.chg != null ? (q.chg > 0 ? "up" : (q.chg < 0 ? "down" : "")) : ""}>{q.chg != null ? `${q.chg > 0 ? "+" : ""}${q.chg}` : "--"}</td>
+            <td className={q.pct != null ? (q.pct > 0 ? "up" : (q.pct < 0 ? "down" : "")) : ""}>{q.pct != null ? `${q.pct > 0 ? "▲" : "▼"} ${Math.abs(q.pct)}%` : "--"}</td>
+          </tr>)}
+        </tbody>
+      </table>
+    )}
+    <p className="tt-hint">期货主连合约为连续主力数据，仅供行情参考，不构成投资建议；夜盘时段价格可能停滞。</p>
+  </>;
+}
+
+function FinanceReco({ notify }: { notify: (m: string) => void; device?: Device }) {
+  const [items, setItems] = useState<RecoItem[]>([]);
+  const [disclaimer, setDisclaimer] = useState("");
+  const [updatedAt, setUpdatedAt] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ items: RecoItem[]; disclaimer?: string; updated_at?: string }>("/api/finance/recommend");
+      setItems(r.items || []);
+      setDisclaimer(r.disclaimer || "");
+      setUpdatedAt(r.updated_at || "");
+    } catch (e) { notify((e as Error).message); } finally { setBusy(false); }
+  }, [notify]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function addToWatch(code: string) {
+    try {
+      const r = await api<{ watchlist: { code: string }[] }>("/api/finance/watchlist");
+      const codes = (r.watchlist || []).map((x) => x.code).concat([code]);
+      await api("/api/finance/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codes }) });
+      notify(`已把 ${code} 加入自选`);
+    } catch (e) { notify((e as Error).message); }
+  }
+
+  return <>
+    <div className="section-heading"><div><span>智能推荐</span><h3>按当日动量排序的候选池</h3></div>
+      <button className="button light" disabled={busy} onClick={() => void load()}>{busy ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}刷新推荐</button></div>
+    {items.length === 0 ? <div className="tt-empty">暂无推荐结果，点击刷新重试。</div> : (
+      <table className="fin-table">
+        <thead><tr><th>股票</th><th>现价</th><th>涨跌幅</th><th>推荐理由</th><th></th></tr></thead>
+        <tbody>
+          {items.map((it) => <tr key={it.code}>
+            <td><b>{it.name}</b><small>{it.code}</small></td>
+            <td>{it.price != null ? it.price.toFixed(2) : "--"}</td>
+            <td className={it.pct != null ? (it.pct >= 0 ? "up" : "down") : ""}>{it.pct != null ? `${it.pct >= 0 ? "+" : ""}${it.pct.toFixed(2)}%` : "--"}</td>
+            <td>{it.reason}</td>
+            <td><button className="text-button" onClick={() => void addToWatch(it.code)}>加入自选</button></td>
+          </tr>)}
+        </tbody>
+      </table>
+    )}
+    <p className="tt-hint">{disclaimer || "推荐结果为公开行情的规则化排序，仅供参考，不构成投资建议。"}{updatedAt ? ` · 更新于 ${updatedAt.slice(11, 19)}` : ""}</p>
+  </>;
+}
+
+type PortfolioPosition = { code: string; name?: string; shares: number; cost: number; price?: number | null; value?: number | null; pnl?: number | null; pnl_pct?: number | null; weight?: number | null; advice?: string };
+type PortfolioSummary = { market_value: number; cost_value: number; pnl: number; pnl_pct: number | null; cash: number; count: number };
+type PortfolioView = { positions: PortfolioPosition[]; summary?: PortfolioSummary; notes?: string[]; disclaimer?: string; cash?: number };
+
+function FinancePortfolio({ notify, device }: { notify: (m: string) => void; device?: Device }) {
+  const [view, setView] = useState<PortfolioView | null>(null);
+  const [cash, setCash] = useState("");
+  const [code, setCode] = useState("");
+  const [shares, setShares] = useState("");
+  const [cost, setCost] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [watch, setWatch] = useState<WatchItem[]>([]);
+  const [watchPx, setWatchPx] = useState<Record<string, { name?: string; price?: number | null }>>({});
+  // 导入行：code → { shares, cost }（默认 100 股 / 现价）
+  const [imp, setImp] = useState<Record<string, { shares: string; cost: string }>>({});
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      const [r, w] = await Promise.all([
+        api<PortfolioView>("/api/finance/portfolio"),
+        api<{ watchlist: WatchItem[] }>("/api/finance/watchlist").catch(() => ({ watchlist: [] as WatchItem[] })),
+      ]);
+      setView(r);
+      setCash(r.cash != null ? String(r.cash) : "");
+      const list = w.watchlist || [];
+      setWatch(list);
+      if (list.length) {
+        try {
+          const qs = await api<{ quotes: Array<{ code: string; name?: string; price?: number | null }> }>(`/api/finance/quote?codes=${list.map((x) => x.code).join(",")}`);
+          const px: Record<string, { name?: string; price?: number | null }> = {};
+          for (const q of qs.quotes || []) px[q.code] = { name: q.name, price: q.price };
+          setWatchPx(px);
+          setImp((cur) => {
+            const next = { ...cur };
+            for (const item of list) {
+              if (next[item.code]) continue;
+              const p = px[item.code]?.price;
+              next[item.code] = { shares: "100", cost: p != null ? String(p) : "" };
+            }
+            return next;
+          });
+        } catch { /* 行情失败不影响主视图 */ }
+      } else { setWatchPx({}); }
+    } catch (e) { notify((e as Error).message); } finally { setBusy(false); }
+  }, [notify]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const save = useCallback(async (positions: PortfolioPosition[]) => {
+    setBusy(true);
+    try {
+      await api("/api/finance/portfolio", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cash: Number(cash) || 0, positions: positions.map((p) => ({ code: p.code, name: p.name || "", shares: p.shares, cost: p.cost })) }),
+      });
+      await load();
+    } catch (e) { notify((e as Error).message); } finally { setBusy(false); }
+  }, [cash, load, notify]);
+
+  async function addPosition() {
+    let target = code.trim();
+    let resolvedName = "";
+    if (!/^\d{6}$/.test(target)) {
+      // 名称/拼音 → 自动反查代码
+      if (!target) { notify("请输入股票名称或 6 位证券代码"); return; }
+      try {
+        const r = await api<{ items: Array<{ code: string; name: string }> }>(`/api/finance/search?q=${encodeURIComponent(target)}`);
+        if (!r.items?.length) { notify(`未找到「${target}」，请确认名称或直接输入 6 位代码`); return; }
+        target = r.items[0].code;
+        resolvedName = r.items[0].name || "";
+        if (r.items.length > 1) notify(`已匹配：${resolvedName || target}（${target}）`);
+      } catch (e) { notify((e as Error).message); return; }
+    }
+    const sh = Number(shares), cs = Number(cost);
+    if (!(sh > 0) || !(cs > 0)) { notify("请填写股数与成本价"); return; }
+    const existing = (view?.positions || []).map((p) => ({ ...p }));
+    if (existing.some((p) => p.code === target)) { notify(`${resolvedName || target} 已在持仓中，如需调整请先移除`); return; }
+    existing.push({ code: target, name: resolvedName, shares: sh, cost: cs });
+    if (existing.length > 10) { notify("持仓最多 10 只"); return; }
+    await save(existing);
+    setCode(""); setShares(""); setCost("");
+    notify(`已录入持仓：${resolvedName || target}`);
+  }
+
+  async function removePosition(target: string) {
+    await save((view?.positions || []).filter((p) => p.code !== target));
+    notify(`已移除 ${target}`);
+  }
+
+  async function applyToDevice() {
+    if (!device) { notify("请先在右上角选择已绑定的设备"); return; }
+    if (!view?.summary?.count) { notify("请先录入持仓"); return; }
+    try {
+      const r = await api<{ message?: string }>("/api/finance/portfolio/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mac: device.mac }) });
+      notify(r.message || "已写入设备");
+    } catch (e) { notify((e as Error).message); }
+  }
+
+  const s = view?.summary;
+  const money = (v?: number | null) => (v == null ? "--" : `¥${v.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`);
+  const pctText = (v?: number | null) => (v == null ? "--" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`);
+
+  return <>
+    <div className="section-heading"><div><span>资金管理</span><h3>钱分配到了哪些股 · 赚了还是亏了</h3></div>
+      <button className="button primary" disabled={busy} onClick={() => void applyToDevice()}><Check size={16} />应用到设备（{device ? device.nickname || device.mac : "未选设备"}）</button></div>
+
+    {s ? <div className="pf-summary">
+      <div><span>总市值</span><b>{money(s.market_value)}</b></div>
+      <div><span>持仓成本</span><b>{money(s.cost_value)}</b></div>
+      <div><span>总盈亏</span><b className={s.pnl > 0 ? "up" : (s.pnl < 0 ? "down" : "")}>{s.pnl > 0 ? "+" : ""}{money(s.pnl)}（{pctText(s.pnl_pct)}）</b></div>
+      <div><span>现金</span><b>{money(s.cash)}</b></div>
+    </div> : null}
+    {(view?.notes || []).map((n) => <p className="tt-hint" key={n}>· {n}</p>)}
+
+    <div className="section-heading"><div><span>录入</span><h3>新增持仓</h3></div></div>
+    <div className="fin-input-row">
+      <div className="pf-form">
+        <input placeholder="股票名称或代码，如 乐鑫科技 / 688018" value={code} onChange={(e) => setCode(e.target.value)} />
+        <input placeholder="股数" value={shares} onChange={(e) => setShares(e.target.value)} />
+        <input placeholder="成本价" value={cost} onChange={(e) => setCost(e.target.value)} />
+        <input placeholder="现金（元）" value={cash} onChange={(e) => setCash(e.target.value)} />
+        <button className="button primary" disabled={busy} onClick={() => void addPosition()}><Plus size={16} />录入持仓</button>
+        <button className="button light" disabled={busy} onClick={() => void save(view?.positions || [])}>保存现金</button>
+      </div>
+    </div>
+
+    {(() => {
+      const held = new Set((view?.positions || []).map((p) => p.code));
+      const importable = watch.filter((w) => !held.has(w.code));
+      if (!importable.length) return null;
+      const importOne = async (item: WatchItem) => {
+        const row = imp[item.code] || { shares: "100", cost: watchPx[item.code]?.price != null ? String(watchPx[item.code].price) : "" };
+        const sh = Number(row.shares), cs = Number(row.cost);
+        if (!(sh > 0)) { notify("请填写导入股数"); return; }
+        if (!(cs > 0)) { notify("暂无该股现价，请手填成本价"); return; }
+        const existing = (view?.positions || []).map((p) => ({ ...p }));
+        existing.push({ code: item.code, name: item.name || watchPx[item.code]?.name || "", shares: sh, cost: cs });
+        if (existing.length > 10) { notify("持仓最多 10 只"); return; }
+        await save(existing);
+        notify(`已从自选股导入：${item.name || item.code}`);
+      };
+      const importAll = async () => {
+        const existing = (view?.positions || []).map((p) => ({ ...p }));
+        let added = 0;
+        for (const item of importable) {
+          if (existing.length >= 10) { notify("持仓已达 10 只上限，剩余未导入"); break; }
+          const row = imp[item.code] || { shares: "100", cost: watchPx[item.code]?.price != null ? String(watchPx[item.code].price) : "" };
+          const sh = Number(row.shares), cs = Number(row.cost);
+          if (!(sh > 0) || !(cs > 0)) continue;
+          existing.push({ code: item.code, name: item.name || watchPx[item.code]?.name || "", shares: sh, cost: cs });
+          added += 1;
+        }
+        if (!added) { notify("没有可导入的自选股（缺现价或股数）"); return; }
+        await save(existing);
+        notify(`已从自选股导入 ${added} 只，成本默认为现价`);
+      };
+      return <>
+        <div className="section-heading"><div><span>快捷导入</span><h3>从自选股导入 <span className="sc-badge">{importable.length}</span></h3></div>
+          <button className="button primary" disabled={busy} onClick={() => void importAll()}><Plus size={16} />全部导入</button></div>
+        <div className="pf-import">
+          {importable.map((w) => {
+            const px = watchPx[w.code];
+            const row = imp[w.code] || { shares: "100", cost: px?.price != null ? String(px.price) : "" };
+            return <div className="pf-import-row" key={w.code}>
+              <span className="pf-import-name"><b>{w.name || px?.name || w.code}</b><small>{w.code}</small></span>
+              <span className="pf-import-px">{px?.price != null ? `现价 ${px.price.toFixed(2)}` : "无行情"}</span>
+              <input aria-label="股数" value={row.shares} onChange={(e) => setImp({ ...imp, [w.code]: { ...row, shares: e.target.value } })} />
+              <input aria-label="成本价" value={row.cost} onChange={(e) => setImp({ ...imp, [w.code]: { ...row, cost: e.target.value } })} />
+              <button className="button light" disabled={busy} onClick={() => void importOne(w)}><Plus size={14} />导入</button>
+            </div>;
+          })}
+          <p className="tt-hint">成本价默认填当前行情价，可在输入框改成真实成本后再导入。</p>
+        </div>
+      </>;
+    })()}
+
+    {!view?.positions.length ? <div className="tt-empty">还没有持仓。录入代码、股数与成本价，平台会用实时行情算出盈亏与仓位。</div> : (
+      <table className="fin-table">
+        <thead><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>市值</th><th>盈亏</th><th>仓位</th><th>参考</th><th></th></tr></thead>
+        <tbody>
+          {view.positions.map((p) => <tr key={p.code}>
+            <td><b>{p.name || p.code}</b><small>{p.code}</small></td>
+            <td>{p.shares}</td>
+            <td>{p.cost}</td>
+            <td>{p.price != null ? p.price.toFixed(2) : "--"}</td>
+            <td>{money(p.value)}</td>
+            <td className={p.pnl != null ? (p.pnl > 0 ? "up" : (p.pnl < 0 ? "down" : "")) : ""}>{p.pnl != null ? `${p.pnl > 0 ? "+" : ""}${p.pnl.toFixed(0)}（${pctText(p.pnl_pct)}）` : "--"}</td>
+            <td>{p.weight != null ? `${p.weight}%` : "--"}</td>
+            <td>{p.advice || "--"}</td>
+            <td><button aria-label={`移除 ${p.code}`} onClick={() => void removePosition(p.code)}><X size={14} /></button></td>
+          </tr>)}
+        </tbody>
+      </table>
+    )}
+    <p className="tt-hint">{view?.disclaimer || "调仓参考为规则化提示，不构成投资建议"}；红涨绿跌，盈亏正负代表上涨/下跌。B 屏展示资金看板，A 屏展示自选行情。</p>
+  </>;
+}
+
 function SceneCenter({ selected, choose, openConfig }: { selected: SceneKey; choose: (k: SceneKey) => void; openConfig: () => void }) {
   return <>
     <div className="page-intro"><div><span className="kicker">SCENE LIBRARY</span><h2>先选生活，再配屏幕</h2><p>每个场景都是一套可修改的双屏起点，切换不会删除你的自定义内容。</p></div></div>
@@ -276,12 +681,14 @@ function useDualWeatherPreview(enabled: boolean, deviceMac: string, city: string
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState("");
   useEffect(() => {
-    if (!enabled || !deviceMac) { setWeatherPreview(null); setWeatherError(""); setWeatherLoading(false); return; }
+    if (!enabled) { setWeatherPreview(null); setWeatherError(""); setWeatherLoading(false); return; }
     let active = true;
     setWeatherLoading(true);
     setWeatherError("");
     const cityParam = city.trim() ? `?city=${encodeURIComponent(city.trim())}` : "";
-    api<DualWeatherPreview>(`/api/device/${encodeURIComponent(deviceMac)}/dual-weather${cityParam}`)
+    // 天气预览与设备无关：未绑定设备时直接走设备无关接口，仍能预览效果
+    const path = deviceMac ? `/api/device/${encodeURIComponent(deviceMac)}/dual-weather${cityParam}` : `/api/weather${cityParam}`;
+    api<DualWeatherPreview>(path)
       .then(data => { if (active) setWeatherPreview(data); })
       .catch(error => { if (active) { setWeatherPreview(null); setWeatherError((error as Error).message || "天气数据读取失败"); } })
       .finally(() => { if (active) setWeatherLoading(false); });
@@ -342,8 +749,18 @@ const SCENE_MODES: Record<SceneKey, { a: { key: string; label: string }[]; b: { 
     b: [{ key: "course", label: "课程表" }, { key: "album", label: "相册" }],
   },
   finance: {
-    a: [{ key: "finance-watch", label: "自选行情" }, { key: "finance-summary", label: "市场摘要" }],
-    b: [{ key: "finance-trend", label: "行情趋势" }, { key: "finance-watch", label: "自选行情" }],
+    a: [
+      { key: "finance-watch", label: "自选股行情" },
+      { key: "finance-reco", label: "推荐股" },
+      { key: "finance-portfolio", label: "资金管理看板" },
+      { key: "finance-gold", label: "黄金/期货" },
+      { key: "notes", label: "便签" },
+    ],
+    b: [
+      { key: "finance-trend", label: "行情趋势（日K）" },
+      { key: "finance-watch", label: "自选股行情" },
+      { key: "finance-gold", label: "黄金/期货" },
+    ],
   },
   health: {
     a: [{ key: "health", label: "今日健康提醒" }, { key: "health-medication", label: "用药与饮水" }],
@@ -364,10 +781,12 @@ function ScreenForm({ kind, sceneKey, value, onChange }: { kind: "a"|"b"; sceneK
   const familySource = (mode: string) => kind === "b"
     ? mode === "album" ? "后台相册（内容管理）" : "后台家庭日程（内容管理）"
     : ({ family: "家庭内容管理（天气、快递缴费、待办、日程、采购、纪念日）", "family-weather": "和风天气 API（设备城市）", "family-express-bills": "家庭内容管理（快递与缴费）", "family-todos": "家庭内容管理（待办与便签）", "family-shopping": "家庭内容管理（采购清单）", "family-anniversary": "家庭内容管理（纪念日）", notes: "后台便签", album: "后台相册（内容管理）" } as Record<string, string>)[mode] || "家庭内容管理";
-  const sourceOptions = [
-    ...(kind === "b" ? ["课程表", "天气", "每日作业"] : []),
-    "后台手动配置", "相册（后台上传）", "飞书日历", "TF 卡", "行情数据源",
-  ];
+  const sourceOptions = sceneKey === "finance"
+    ? ["行情数据源"]
+    : [
+        ...(kind === "b" ? ["课程表", "天气", "每日作业"] : []),
+        "后台手动配置", "相册（后台上传）", "飞书日历", "TF 卡", "行情数据源",
+      ];
   const refreshOptions = ["每 5 分钟", "每 10 分钟", "每 15 分钟", "每 30 分钟", "每 12 小时", "每 24 小时"];
   return <div className={`screen-form ${kind}`}>
     <div className="screen-form-head"><div><span>{kind.toUpperCase()} 屏</span><h3>{kind === "a" ? "FPC1 · 黑白快刷" : "FPC2 · 三色 / 四色"}</h3></div><span className="screen-status"><i/>已启用</span></div>
@@ -395,7 +814,10 @@ function ScreenPreview({ kind, sceneKey, scene, config, content, screen, weather
   } else if (sceneKey === "health") {
     body = <SceneModePreview title={config.title} modules={config.modules} note="提醒内容可在内容管理中维护" />;
   } else if (sceneKey === "finance") {
-    body = <SceneModePreview title={config.title} modules={config.modules} note="当前尚未连接实时行情源" />;
+    const mode = config.mode || (kind === "b" ? "finance-trend" : "finance-watch");
+    body = kind === "a" && mode === "notes"
+      ? <NotesPreview notes={content.notes} />
+      : <FinanceModePreview kind={kind} mode={mode} />;
   } else if (sceneKey === "family" && kind === "a") {
     const modeLabels: Record<string, string> = {
       family: "家庭提醒（总览含日程）", "family-weather": "天气", "family-express-bills": "快递与缴费",
@@ -433,22 +855,122 @@ function ScreenPreview({ kind, sceneKey, scene, config, content, screen, weather
 
 function CalendarPreview() { return <div className="calendar-preview"><div className="week">{["一","二","三","四","五","六","日"].map(v=><b key={v}>{v}</b>)}</div><div className="days">{Array.from({length:28},(_,i)=><span key={i} className={i===15?"today":i===17?"event":""}>{i+1}</span>)}</div><p><i/>今天 · 家庭日晚餐</p></div>; }
 function WeatherBoard({ data, loading, error, city }: { data?: DualWeatherPreview | null; loading: boolean; error: string; city: string }) {
-  if (!data) return <div className="eink-screen weather-board"><div className="weather-board-head"><b>{city}</b><span>{loading ? "正在获取天气…" : "实时天气"}</span></div><div className="weather-board-empty">{error || (loading ? "正在读取天气预报" : "选择设备后加载实时天气")}</div></div>;
+  if (!data) return <div className="eink-screen weather-board"><div className="weather-board-head"><b>{city}</b><span>{loading ? "正在获取天气…" : "实时天气"}</span></div><div className="weather-board-empty">{error || (loading ? "正在读取天气预报" : "暂无天气数据，请先在「个人信息 → 家庭与设备位置」设置城市")}</div></div>;
   const currentTemp = data.current_temp || data.today_temp || "--";
+  const now = new Date();
+  const weekLabel = "日一二三四五六"[now.getDay()];
+  const term = data.solar_term ? `${data.solar_term} · 第${data.solar_term_day || "1"}天` : "";
   return <div className="eink-screen weather-board">
-    <div className="weather-board-head"><b>{data.city || city}</b><span>实时天气</span></div>
-    <div className="weather-board-main">
-      <div className="weather-current"><strong>{currentTemp}°C</strong><div className="weather-current-desc"><WeatherIcon code={data.today_code} description={data.today_desc}/><span>{data.today_desc}</span></div><small>{data.today_low}°C / {data.today_high}°C</small></div>
-      <div className="weather-forecast">{(data.forecast || []).slice(0, 4).map((day, i) => <div className="weather-day" key={`${day.date}-${i}`}><b>{day.day}</b><small>{day.date}</small><WeatherIcon code={day.code} description={day.desc}/><span>{day.desc}</span><small>{day.temp_range.replaceAll("℃", "°")}</small></div>)}</div>
+    <div className="wb-head">
+      <div className="wb-head-city"><b>{data.city || city}</b><small>{data.city_pinyin}</small>{term ? <i className="wb-term">{term}</i> : null}</div>
+      <div className="wb-head-right"><b>天气</b></div>
     </div>
-    <div className="weather-board-meta"><span>湿度 {data.today_humidity || "--"}%</span><span>{data.today_wind_dir || ""} {data.today_wind_level || ""}</span></div>
-    <div className="weather-board-sun">日出 {data.sunrise || "--:--"}<i/>日落 {data.sunset || "--:--"}</div>
-    <div className="weather-board-advice">{data.advice || "注意根据天气添减衣物"}</div>
-    <div className="weather-board-footer"><span><Cloud size={13}/> 天气</span><span>实时预报</span></div>
+    <div className="wb-mid">
+      <div className="wb-now">
+        <div className="wb-temp"><strong>{currentTemp.replace("°", "")}</strong><i>°</i></div>
+        <div className="wb-now-mid">
+          <b>{data.today_desc}</b>
+          <small>体感 {data.feels_like || "--"}</small>
+          <small>湿度 {data.today_humidity || "--"}</small>
+          <small>风力 {data.today_wind_dir || ""} {data.today_wind_level || ""}</small>
+        </div>
+        <div className="wb-now-icon"><WeatherIcon code={data.today_code} description={data.today_desc}/></div>
+      </div>
+      <div className="wb-cal">
+        <div className="wb-cal-top"><b>{now.getFullYear()}年{now.getMonth() + 1}月</b><span>第{Math.ceil(now.getDate() / 7)}周</span></div>
+        <div className="wb-cal-day"><strong>{now.getDate()}</strong><div><b>星期{weekLabel}</b><small>{data.lunar_date || "--"}</small></div></div>
+        <div className="wb-cal-lunar"><span>{data.lunar_year || ""}</span><span>{data.lunar_zodiac ? `${data.lunar_zodiac}年` : ""}</span>{term ? <i>{term}</i> : null}</div>
+        <div className="wb-plate"><b>限行</b><span>{data.plate_limit || "--"}</span><small>尾号</small></div>
+      </div>
+    </div>
+    <div className="wb-divider"><span>三日天气 · 最高 / 最低 / ℃</span></div>
+    <div className="wb-forecast">{(data.forecast || []).slice(0, 3).map((day, i) => <div className="wb-day" key={`${day.date}-${i}`}>
+      <small className="wb-day-date">{day.date}</small>
+      <WeatherIcon code={day.code} description={day.desc}/>
+      <span className="wb-day-desc">{day.desc}</span>
+      <b className="wb-day-temp">{day.temp_range.replace("°~", "° / ")}</b>
+    </div>)}</div>
+    <div className="wb-tip"><b>温馨提示</b><span>{data.advice || "根据天气变化，注意添减衣物。"}</span><small>日出 {data.sunrise} · 日落 {data.sunset}</small></div>
+    <div className="weather-board-footer"><span><Cloud size={13}/> 天气预报 · {data.updated_at || ""}</span><span>小悟 AI · 实时</span></div>
   </div>;
 }
 function WeatherIcon({ code, description }: { code?: number; description: string }) { const d = description || ""; const props = { size: 25, strokeWidth: 1.8 }; if (/雨|雷|阵雨/.test(d) || (code !== undefined && [51,53,55,61,63,65,80,81,82,95,96,99].includes(code))) return <CloudRain {...props}/>; if (/雪/.test(d) || (code !== undefined && [71,73,75,77,85,86].includes(code))) return <CloudSnow {...props}/>; if (/晴/.test(d) || code === 0) return <Sun {...props}/>; if (/多云/.test(d) || code === 1 || code === 2) return <CloudSun {...props}/>; return <Cloud {...props}/>; }
 function SceneModePreview({ title, modules, note }: { title: string; modules: string[]; note: string }) { return <div className="eink-screen"><div className="eink-title"><b>{title}</b><span>场景专属</span></div><div className="eink-list">{modules.slice(0, 5).map((m, i) => <div key={`${m}-${i}`}><span>{i === 0 ? "●" : "○"} {m}</span><b>{i === 0 ? "今日" : ""}</b></div>)}</div><small className="eink-sub">{note}</small></div>; }
+
+// 理财 A/B 屏预览：拉真实行情按设备版式渲染（自选/推荐/持仓/黄金）
+type FinanceRow = { code: string; name?: string; price?: number | null; pct?: number | null; reason?: string; advice?: string };
+function FinanceModePreview({ kind, mode }: { kind: "a" | "b"; mode: string }) {
+  const [rows, setRows] = useState<FinanceRow[]>([]);
+  const [summary, setSummary] = useState<{ pnl?: number | null; pnl_pct?: number | null; market_value?: number | null } | null>(null);
+  const [watch, setWatch] = useState<WatchItem[]>([]);
+  const [klineIdx, setKlineIdx] = useState(0);
+  const [autoPlay, setAutoPlay] = useState(true);
+  const [err, setErr] = useState("");
+  const rotate = mode === "finance-trend" && kind === "b" && watch.length > 1;
+  const cur = watch[Math.min(klineIdx, Math.max(0, watch.length - 1))];
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setErr(""); setSummary(null); setWatch([]); setKlineIdx(0);
+        if (mode === "finance-gold") {
+          const r = await api<{ items: FinanceRow[] }>("/api/finance/gold");
+          if (alive) setRows(r.items || []);
+        } else if (mode === "finance-reco") {
+          const r = await api<{ items: FinanceRow[] }>("/api/finance/recommend");
+          if (alive) setRows(r.items || []);
+        } else if (mode === "finance-portfolio") {
+          const r = await api<{ positions: FinanceRow[]; summary: typeof summary }>("/api/finance/portfolio");
+          if (alive) { setRows((r.positions || []).slice(0, 5)); setSummary(r.summary || null); }
+        } else {
+          // finance-watch / finance-trend：自选股 × 实时行情
+          const w = await api<{ watchlist: WatchItem[] }>("/api/finance/watchlist").catch(() => ({ watchlist: [] }));
+          const list = w.watchlist || [];
+          const codes = list.slice(0, 5).map((x) => x.code);
+          if (!list.length) { if (alive) setErr("自选股为空 · 请在「内容管理 → 自选股」添加"); return; }
+          const q = await api<{ quotes: FinanceRow[] }>(`/api/finance/quote?codes=${encodeURIComponent(codes.join(","))}`);
+          if (!alive) return;
+          setRows((q.quotes || []).map((x, i) => ({ ...x, name: list[i]?.name || x.name })));
+          if (kind === "b" && mode === "finance-trend") setWatch(list);
+        }
+      } catch (e) { if (alive) setErr((e as Error).message); }
+    })();
+    return () => { alive = false; };
+  }, [kind, mode]);
+
+  // 自动轮播：8 秒切下一只自选
+  useEffect(() => {
+    if (!rotate || !autoPlay) return;
+    const t = setInterval(() => setKlineIdx((i) => (i + 1) % watch.length), 8000);
+    return () => clearInterval(t);
+  }, [rotate, autoPlay, watch.length]);
+
+  if (err) return <div className="eink-screen"><div className="eink-title"><b>实时行情</b></div><div className="eink-list">{[0, 1, 2].map((i) => <div key={i}><span>○ 暂无数据</span></div>)}</div><small className="eink-sub">{err}</small></div>;
+  if (kind === "b" && rotate) return (
+    <div className="kline-full" onClick={() => { setAutoPlay(false); setKlineIdx((i) => (i + 1) % watch.length); }} title="点击切换下一只自选股">
+      {cur ? <img className="kline-full-img" src={`/api/finance/kline/image?code=${encodeURIComponent(cur.code)}&days=60&w=800&h=600&colors=4&t=${klineIdx}`} alt={`${cur.name || cur.code} 日 K`} /> : null}
+      <div className="kline-full-bar" onClick={(e) => { e.stopPropagation(); setAutoPlay((v) => !v); }}>
+        <span>{cur ? `${cur.name || cur.code} · 第 ${klineIdx + 1}/${watch.length} 只` : "加载中…"}</span>
+        <button aria-label="轮播开关">{autoPlay ? "轮播中 · 点击暂停" : "已暂停 · 点击轮播"}</button>
+      </div>
+    </div>
+  );
+  const title = mode === "finance-reco" ? "推荐股" : mode === "finance-portfolio" ? "资金看板" : mode === "finance-gold" ? "黄金/期货" : "实时行情";
+  return <div className="eink-screen">
+    <div className="eink-title"><b>{title}</b><span>{summary ? (summary.pnl != null ? `${summary.pnl > 0 ? "+" : ""}${summary.pnl.toFixed(0)}` : `${summary.pnl}`) : new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false })}</span></div>
+    <div className="eink-list">
+      {rows.length ? rows.map((r) => <div key={r.code} className="eink-quote-row">
+        <span className="eink-quote-name">{r.name || r.code}<small>{r.reason || r.advice || ""}</small></span>
+        <b className={`eink-quote-px ${r.pct != null ? (r.pct > 0 ? "up" : (r.pct < 0 ? "down" : "")) : ""}`}>
+          {r.price != null ? r.price.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) : "--"}
+          <small>{r.pct != null ? `${r.pct > 0 ? "▲" : "▼"}${Math.abs(r.pct)}%` : ""}</small>
+        </b>
+      </div>) : <div><span>○ 暂无数据</span></div>}
+    </div>
+    <small className="eink-sub">{mode === "finance-portfolio" ? `总盈亏 ${summary?.pnl_pct != null ? `${summary.pnl_pct > 0 ? "+" : ""}${summary.pnl_pct}%` : "--"} · 持仓明细见「资金管理」` : `数据源 · 行情数据源 · 每 5 分钟`}</small>
+  </div>;
+}
 function BarsPreview({ photo }: { photo?: boolean }) { return photo ? <div className="photo-preview"><span>照片 / 海报预览</span><div/><p>来自后台相册 · 3 张</p></div> : <div className="bars-preview"><div>{[28,42,35,58,51,67,62,79,70,86].map((v,i)=><i key={i} style={{height:`${v}%`}}/>)}</div><p><span>黄金 AU</span><b>▲ 0.84%</b></p><p><span>沪深 300</span><b>▼ 0.26%</b></p></div>; }
 
 function ScreenSummary({ kind, config }: { kind: "a"|"b"; config: ScreenConfig }) { return <div className={`screen-summary ${kind}`}><div className="summary-head"><span>{kind.toUpperCase()} 屏</span><div><b>{config.title}</b><small>{kind === "a" ? "FPC1 · 黑白快刷" : "FPC2 · 三/四色"}</small></div><i>已启用</i></div><div className="summary-body">{config.modules.slice(0,4).map(m=><span key={m}><Check size={13}/>{m}</span>)}</div><div className="summary-foot"><span><RefreshCw size={13}/>{config.refresh}</span><span><Cloud size={13}/>{config.source}</span></div></div>; }
@@ -461,17 +983,31 @@ function DeviceManager({ devices, user, refresh, openAuth, openPair, notify, cho
   </>;
 }
 
-function MembersPanel({ device, user, notify }: { device?: Device; user: User|null; notify:(m:string)=>void }) {
+function MembersPanel({ device, user, notify, setNav }: { device?: Device; user: User|null; notify:(m:string)=>void; setNav:(v:NavKey)=>void }) {
   const [members, setMembers] = useState<Array<{user_id:number;username:string;role?:string}>>([]); const [name,setName]=useState(""); const [busy,setBusy]=useState(false);
   useEffect(()=>{ if (!device||!user) return; api<{members?:typeof members}>(`/api/user/devices/${encodeURIComponent(device.mac)}/members`).then(r=>setMembers(r.members||[])).catch(()=>setMembers([])); },[device,user]);
   async function share(){ if(!device||!name.trim())return;setBusy(true);try{await api(`/api/user/devices/${encodeURIComponent(device.mac)}/share`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:name.trim()})});setName("");notify("共享邀请已发送");}catch(e){notify((e as Error).message)}finally{setBusy(false)}}
   if(!user)return <EmptyState icon={<Users/>} title="登录后查看共享成员" text="家庭、学习场景可以与其他 小悟AI 账号协作。" action="请先登录" onAction={()=>notify("请从右上角登录")}/>;
   if(!device)return <EmptyState icon={<Cpu/>} title="请先绑定设备" text="绑定设备后即可邀请家庭成员或同事共同维护。" action="前往设备管理" onAction={()=>notify("请在设备管理中绑定设备")}/>;
-  return <><div className="page-intro"><span className="kicker">COLLABORATION</span><h2>{device.nickname||"双屏设备"} · 共享成员</h2><p>成员体系复用 小悟AI。所有者可以邀请、审批和移除成员。</p></div><div className="member-layout"><div className="member-card"><h3>邀请成员</h3><p>输入对方的 小悟AI 用户名。</p><div className="inline-form"><input placeholder="用户名" value={name} onChange={e=>setName(e.target.value)}/><button className="button primary" disabled={busy} onClick={()=>void share()}>{busy?<LoaderCircle className="spin" size={16}/>:<Plus size={16}/>}发送邀请</button></div></div><div className="member-card"><h3>当前成员 <span>{members.length}</span></h3>{members.length?members.map(m=><div className="member" key={m.user_id}><CircleUserRound/><span><b>{m.username}</b><small>{m.role==="owner"?"所有者":"共享成员"}</small></span></div>):<p className="muted">暂未读取到共享成员。</p>}</div></div></>;
+  return <>
+    <div className="page-intro"><span className="kicker">COLLABORATION</span><h2>{device.nickname||"双屏设备"} · 共享成员</h2><p>成员体系复用 小悟AI。所有者可以邀请、审批和移除成员。</p></div>
+    <div className="member-layout">
+      <div className="member-card"><h3>邀请成员</h3><p>输入对方的 小悟AI 用户名。</p><div className="inline-form"><input placeholder="用户名" value={name} onChange={e=>setName(e.target.value)}/><button className="button primary" disabled={busy} onClick={()=>void share()}>{busy?<LoaderCircle className="spin" size={16}/>:<Plus size={16}/>}发送邀请</button></div></div>
+      <div className="member-card"><h3>当前成员 <span>{members.length}</span></h3>{members.length?members.map(m=><div className="member" key={m.user_id}><CircleUserRound/><span><b>{m.username}</b><small>{m.role==="owner"?"所有者":"共享成员"}</small></span></div>):<p className="muted">暂未读取到共享成员。</p>}</div>
+    </div>
+    <div className="member-card teacher-invite-card">
+      <h3>邀请老师 <span>仅学习场景</span></h3>
+      <p>孩子用于学习场景时，家长可在此生成一次性 6 位授权码发给老师。老师免注册、凭码推送便签或作业，不做为独立菜单暴露给所有场景。</p>
+      <div className="connector-actions">
+        <button className="button soft" onClick={()=>setNav("auth")}><KeyRound size={16}/>生成老师邀请码</button>
+      </div>
+      <p className="tt-hint">家庭、养生、办公等场景无需老师参与，不必生成授权码。</p>
+    </div>
+  </>;
 }
 
 type TeacherAuth = { id:number;auth_code:string;auth_name:string;permission:string;expire_time:string|null;is_frozen:boolean;created_at?:string;expired?:boolean };
-function TeacherAuthPanel({ device, user, notify }: { device?: Device; user: User|null; notify:(m:string)=>void }) {
+function TeacherAuthPanel({ device, user, notify, setNav }: { device?: Device; user: User|null; notify:(m:string)=>void; setNav:(v:NavKey)=>void }) {
   const [items, setItems] = useState<TeacherAuth[]>([]);
   const [name, setName] = useState("");
   const [days, setDays] = useState<string>("30");
@@ -517,7 +1053,7 @@ function TeacherAuthPanel({ device, user, notify }: { device?: Device; user: Use
   if (!device) return <EmptyState icon={<Cpu/>} title="请先绑定设备" text="绑定设备后即可为老师生成推送授权码。" action="前往设备管理" onAction={()=>notify("请在设备管理中绑定设备")}/>;
 
   return <>
-    <div className="page-intro"><span className="kicker">TEACHER ACCESS</span><h2>{device.nickname||"双屏设备"} · 老师授权</h2><p>老师免注册：生成 6 位授权码发给老师，老师凭码在「微信小程序 / 扫码」推送便签或作业。授权码可随时冻结或设有效期，过期自动失效。</p></div>
+    <div className="page-intro"><span className="kicker">TEACHER INVITE · STUDY ONLY</span><h2>{device.nickname||"双屏设备"} · 邀请老师</h2><p>仅用于学习场景：由家长发起邀请，生成 6 位授权码发给老师。老师免注册，凭码在微信小程序推送便签或作业；授权码可冻结、可设有效期，过期自动失效。</p><button className="text-button intro-back" onClick={()=>setNav("members")}>← 返回共享成员</button></div>
     <div className="member-layout">
       <div className="member-card">
         <h3>生成授权码</h3>
@@ -840,6 +1376,98 @@ function ServiceConfigPanel({ user, notify }: { user: User | null; notify: (m: s
 
 function EmptyState({ icon,title,text,action,onAction }: {icon:React.ReactNode;title:string;text:string;action:string;onAction:()=>void}) { return <div className="empty"><div>{icon}</div><h2>{title}</h2><p>{text}</p><button className="button primary" onClick={onAction}>{action}</button></div>; }
 
+// ——— 连接器：平台级「无需绑定已开通」+ 用户级「去授权 / 已绑定 / 解除绑定」———
+type ConnectorItem = { id:string; name:string; type:"platform"|"user"; category:string; description:string; auth_kind:string; scopes:string[]; guide:string[]; status:"included"|"bound"|"unbound"; status_label:string; external_account?:string; updated_at?:string; bind_url?:string };
+
+function ConnectorsPanel({ user, notify }: { user: User | null; notify: (m: string) => void }) {
+  const [items, setItems] = useState<ConnectorItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [guideFor, setGuideFor] = useState<ConnectorItem | null>(null);
+  const [authorizeUrl, setAuthorizeUrl] = useState("");
+
+  const load = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try { setItems(await api<ConnectorItem[]>("/api/v1/mobile/connectors")); }
+    catch (e) { notify((e as Error).message); }
+    finally { setLoading(false); }
+  }, [user, notify]);
+
+  useEffect(() => { if (user) void load(); else { setItems([]); setGuideFor(null); } }, [user, load]);
+
+  async function authorize(item: ConnectorItem) {
+    setBusy(item.id);
+    try {
+      const r = await api<{ authorize_url: string }>(`/api/v1/mobile/connectors/${item.id}/authorize`, { method: "POST" });
+      setAuthorizeUrl(r.authorize_url);
+      setGuideFor(item);
+      window.open(r.authorize_url, "_blank", "noopener");
+    } catch (e) { notify((e as Error).message); } finally { setBusy(""); }
+  }
+
+  async function unbind(item: ConnectorItem) {
+    if (!confirm(`解除「${item.name}」绑定后，平台会立即删除已保存的凭据，确定继续？`)) return;
+    setBusy(item.id);
+    try {
+      await api(`/api/v1/mobile/connectors/${item.id}/unbind`, { method: "POST" });
+      await load();
+      notify(`已解除「${item.name}」绑定`);
+    } catch (e) { notify((e as Error).message); } finally { setBusy(""); }
+  }
+
+  function copy() {
+    void navigator.clipboard.writeText(authorizeUrl)
+      .then(() => notify("授权链接已复制"))
+      .catch(() => notify("复制失败，请手动选择链接复制"));
+  }
+
+  if (!user) return <EmptyState icon={<Link2 />} title="登录后管理连接器" text="连接器用于把第三方账号（或平台统一采购的数据源）授权给双屏使用。平台级连接器无需绑定；用户级连接器授权一次即可，凭据加密保存在平台服务端。" action="请先登录" onAction={() => notify("请从右上角登录")} />;
+
+  return <>
+    <div className="page-intro"><span className="kicker">CONNECTORS</span><h2>连接器</h2><p>第三方账号一键绑定。平台级能力开箱即用；用户级连接器需授权一次，凭据经加密保存在服务端，可随时解除。</p></div>
+    {loading ? <div className="loading"><LoaderCircle className="spin" />正在读取连接器…</div> : null}
+    <div className="connector-grid">
+      {items.map((item) => (
+        <div className="connector-card" key={item.id}>
+          <div className="connector-head">
+            <h3>{item.name}</h3>
+            <span className={`connector-type ${item.type === "platform" ? "platform" : ""}`}>{item.type === "platform" ? "平台级" : "用户级 · OAuth"}</span>
+          </div>
+          <p className="connector-desc">{item.description}</p>
+          <div className={`connector-status ${item.status}`}>
+            <i />{item.status === "included" ? "无需绑定，已开通" : item.status === "bound" ? `已绑定${item.external_account ? ` · ${item.external_account}` : ""}` : "未绑定 · 去授权后可用"}
+          </div>
+          <div className="connector-actions">
+            {item.status === "unbound" ? <button className="button primary" disabled={busy === item.id} onClick={() => void authorize(item)}>{busy === item.id ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}去授权</button> : null}
+            {item.status === "bound" ? <><button className="button ghost" onClick={() => void load()}><RefreshCw size={16} />刷新状态</button><button className="button danger" disabled={busy === item.id} onClick={() => void unbind(item)}>解除绑定</button></> : null}
+            {item.status === "included" ? <span className="tt-hint">由平台统一采购与维护，所有用户共享，无需任何操作。</span> : null}
+          </div>
+          {item.status === "unbound" && item.guide.length ? (
+            <div className="connector-guide"><b>授权指引</b><ol>{item.guide.map((s) => <li key={s}>{s}</li>)}</ol></div>
+          ) : null}
+        </div>
+      ))}
+      {!loading && items.length === 0 ? <div className="tt-empty">还没有可用的连接器，管理员可在 connectors/ 目录添加。</div> : null}
+    </div>
+
+    {guideFor ? <div className="modal-backdrop" onClick={() => setGuideFor(null)}><div className="modal" onClick={(e) => e.stopPropagation()}>
+      <button className="modal-close" onClick={() => setGuideFor(null)}><X size={16} /></button>
+      <h2>完成「{guideFor.name}」授权</h2>
+      <p>已为你打开授权页；若没有自动打开，点击下方链接或复制到浏览器。</p>
+      <div className="modal-body">
+        <div className="connector-guide"><ol><li>在新窗口确认授权范围（{guideFor.scopes.join("、") || "只读"}）。</li><li>授权完成后回到本页，点「刷新状态」。</li><li>状态变为「已绑定」即完成，凭据已加密写入保险库。</li></ol></div>
+        <div className="connector-link">{authorizeUrl}</div>
+        <div className="connector-actions">
+          <a className="button primary" href={authorizeUrl} target="_blank" rel="noopener noreferrer">打开授权页</a>
+          <button className="button ghost" onClick={copy}>复制链接</button>
+          <button className="button ghost" onClick={() => { setGuideFor(null); void load(); }}><RefreshCw size={16} />刷新状态</button>
+        </div>
+      </div>
+    </div></div> : null}
+  </>;
+}
+
 function AuthModal({ onClose, onSuccess }: { onClose:()=>void; onSuccess:(u:User)=>void }) {
   const [mode,setMode]=useState<"login"|"register"|"reset">("login");
   const [resetStep,setResetStep]=useState<"email"|"verify">("email");
@@ -1070,28 +1698,282 @@ function ensureGrid(ct: CourseTable): CourseTable {
   return { ...ct, grid };
 }
 
-function ContentStudio({ content, setContent, save, savedAt, notify, apply, hasDevice, deviceMac, screen, sceneKey, aMode, bMode }: { content: ContentState; setContent: React.Dispatch<React.SetStateAction<ContentState>>; save: () => void; savedAt: string; notify: (m: string) => void; apply: () => void; hasDevice: boolean; deviceMac: string; screen: { size: "4.2" | "5.83"; colors: 2 | 3 | 4 }; sceneKey: SceneKey; aMode: string; bMode: string }) {
-  const { weatherPreview, weatherLoading, weatherError } = useDualWeatherPreview(sceneKey === "family" && aMode === "family-weather", deviceMac, content.weatherCity);
-  const [tab, setTab] = useState<"course" | "notes" | "homework" | "reading" | "album" | "bills" | "express" | "schedule" | "shopping" | "anniversaries" | "history">("course");
+// ===== 留言板：文本 + 语音（PC 端 / 小程序新增，设备本地录音上传，语音端播放）=====
+type MessageItem = {
+  id: string; kind: "text" | "voice"; text: string; sender_name: string;
+  sender_type: string; duration: number; audio_url: string;
+  created_at: string; played: boolean; source: string;
+};
+
+function messageTime(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso.slice(5, 16).replace("T", " ");
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return sameDay ? hhmm : `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${hhmm}`;
+}
+
+function useMessages(deviceMac: string) {
+  const [items, setItems] = useState<MessageItem[]>([]);
+  const [unread, setUnread] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!deviceMac) { setItems([]); setUnread(0); return; }
+    try {
+      const data = await api<{ items: MessageItem[]; unread: number }>(`/api/device/${encodeURIComponent(deviceMac)}/messages`);
+      setItems(data.items || []);
+      setUnread(data.unread || 0);
+    } catch { /* 设备可能刚解绑，静默 */ }
+  }, [deviceMac]);
+
+  useEffect(() => {
+    if (!deviceMac) { setItems([]); setUnread(0); return; }
+    setLoading(true);
+    refresh().finally(() => setLoading(false));
+    const timer = setInterval(refresh, 30000); // 未读徽标随设备播放自动变化，轻轮询
+    return () => clearInterval(timer);
+  }, [deviceMac, refresh]);
+
+  const addText = useCallback(async (text: string, senderName: string) => {
+    await api(`/api/device/${encodeURIComponent(deviceMac)}/messages`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "text", text, sender_name: senderName }),
+    });
+    await refresh();
+  }, [deviceMac, refresh]);
+
+  const uploadVoice = useCallback(async (blob: Blob, ext: string, duration: number, senderName: string) => {
+    const form = new FormData();
+    form.append("file", blob, `voice-${Date.now()}.${ext}`);
+    form.append("duration", String(Math.max(0, Math.round(duration))));
+    form.append("sender_name", senderName);
+    await api(`/api/device/${encodeURIComponent(deviceMac)}/messages/voice`, { method: "POST", body: form });
+    await refresh();
+  }, [deviceMac, refresh]);
+
+  const markPlayed = useCallback(async (id: string) => {
+    await api(`/api/device/${encodeURIComponent(deviceMac)}/messages/${id}/played`, { method: "POST" });
+    await refresh();
+  }, [deviceMac, refresh]);
+
+  const markAllPlayed = useCallback(async () => {
+    await api(`/api/device/${encodeURIComponent(deviceMac)}/messages/read-all`, { method: "POST" });
+    await refresh();
+  }, [deviceMac, refresh]);
+
+  const remove = useCallback(async (id: string) => {
+    await api(`/api/device/${encodeURIComponent(deviceMac)}/messages/${id}`, { method: "DELETE" });
+    await refresh();
+  }, [deviceMac, refresh]);
+
+  return { items, unread, loading, refresh, addText, uploadVoice, markPlayed, markAllPlayed, remove };
+}
+
+// 鉴权播放：<audio> 无法带 Authorization 头，先取 blob 再播
+function useMessageAudio(onEnded: (id: string) => void) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingId, setPlayingId] = useState("");
+  const stop = useCallback(() => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setPlayingId("");
+  }, []);
+  const play = useCallback(async (msg: MessageItem) => {
+    if (playingId === msg.id) { stop(); return; }
+    stop();
+    try {
+      const resp = await fetch(msg.audio_url, { headers: authHeaders() });
+      if (!resp.ok) throw new Error("音频加载失败");
+      const url = URL.createObjectURL(await resp.blob());
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      setPlayingId(msg.id);
+      audio.onended = () => { URL.revokeObjectURL(url); setPlayingId(""); onEnded(msg.id); };
+      audio.onerror = () => { URL.revokeObjectURL(url); setPlayingId(""); };
+      await audio.play();
+    } catch { setPlayingId(""); }
+  }, [playingId, stop, onEnded]);
+  useEffect(() => () => { if (audioRef.current) audioRef.current.pause(); }, []);
+  return { playingId, play, stop };
+}
+
+function MessageBoardEditor({ deviceMac, hasDevice, unread, items, loading, notify, addText, uploadVoice, markPlayed, markAllPlayed, remove }: {
+  deviceMac: string; hasDevice: boolean; unread: number; items: MessageItem[]; loading: boolean;
+  notify: (m: string) => void;
+  addText: (text: string, senderName: string) => Promise<void>;
+  uploadVoice: (blob: Blob, ext: string, duration: number, senderName: string) => Promise<void>;
+  markPlayed: (id: string) => Promise<void>;
+  markAllPlayed: () => Promise<void>;
+  remove: (id: string) => Promise<void>;
+}) {
+  const [text, setText] = useState("");
+  const [sender, setSender] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const recRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { playingId, play, stop } = useMessageAudio((id) => { markPlayed(id); notify("留言已播放，设备端徽标将同步消失"); });
+
+  async function submitText() {
+    if (!text.trim()) { notify("留言内容不能为空"); return; }
+    setBusy(true);
+    try { await addText(text.trim(), sender.trim() || "家人"); setText(""); notify("留言已创建，设备屏幕将出现提醒标识"); }
+    catch (e) { notify(e instanceof Error ? e.message : "发送失败"); }
+    finally { setBusy(false); }
+  }
+
+  async function startRecord() {
+    if (!navigator.mediaDevices?.getUserMedia) { notify("当前浏览器不支持录音"); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
+      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        if (timerRef.current) clearInterval(timerRef.current);
+        const seconds = recSeconds;
+        setRecording(false); setRecSeconds(0);
+        const ext = (rec.mimeType || "audio/webm").includes("webm") ? "webm" : "ogg";
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        if (seconds < 1) { notify("录音太短，未保存"); return; }
+        setBusy(true);
+        try { await uploadVoice(blob, ext, seconds, sender.trim() || "家人"); notify("语音留言已上传"); }
+        catch (e) { notify(e instanceof Error ? e.message : "上传失败"); }
+        finally { setBusy(false); }
+      };
+      rec.start();
+      recRef.current = rec;
+      setRecording(true); setRecSeconds(0);
+      timerRef.current = setInterval(() => setRecSeconds((s) => s + 1), 1000);
+    } catch { notify("无法访问麦克风，请检查浏览器权限"); }
+  }
+
+  function stopRecord() { recRef.current?.stop(); recRef.current = null; }
+
+  if (!hasDevice || !deviceMac) {
+    return <div className="cs-card"><div className="tt-empty">请先在「设备管理」绑定设备后再使用留言功能。</div></div>;
+  }
   return <>
-    <div className="page-intro row"><div><span className="kicker">CONTENT STUDIO</span><h2>内容管理</h2><p>在这里维护各模式的数据；屏幕模式决定展示哪些数据。家庭 A 屏「快递与缴费」由「快递/取件码」和「缴费台账」两项内容合并展示。</p></div><div className="save-state"><ShieldCheck size={17} />{savedAt ? `模式保存于 ${savedAt}` : "配置尚未保存"}</div></div>
+    <div className="cs-card">
+      <h3><MessageSquare size={16} /> 新建留言</h3>
+      <div className="msg-composer">
+        <input className="cs-input msg-sender" value={sender} maxLength={12} placeholder="留言人（默认「家人」）"
+               onChange={(e) => setSender(e.target.value)} />
+        <textarea className="cs-input msg-text" value={text} maxLength={500} rows={2}
+                  placeholder="输入文字留言…（小程序 / PC 端均可发送）"
+                  onChange={(e) => setText(e.target.value)} />
+        <div className="msg-actions">
+          <button className="button primary" onClick={submitText} disabled={busy || recording}><Plus size={16} />发送文字留言</button>
+          {recording
+            ? <button className="button danger msg-rec" onClick={stopRecord}><Square size={15} />停止录音 · {recSeconds}s</button>
+            : <button className="button soft msg-rec" onClick={startRecord} disabled={busy}><Mic size={16} />按住说话 · 本地录音</button>}
+        </div>
+      </div>
+      <p className="tt-hint">设备端（小悟语音端）也能录：录音经 <code>POST /api/device/&#123;mac&#125;/messages/voice</code> 上传后出现在这里。语音在设备上播放后自动标记已听。</p>
+    </div>
+    <div className="cs-card">
+      <h3><AudioLines size={16} /> 留言列表{unread > 0 ? <span className="msg-unread-pill">{unread} 条未读</span> : null}
+        {unread > 0 ? <button className="button sm ghost" style={{ marginLeft: "auto" }} onClick={() => { markAllPlayed(); notify("已全部标记为已听"); }}><Check size={14} />全部已听</button> : null}
+      </h3>
+      {loading && items.length === 0 ? <div className="tt-empty">正在读取留言…</div>
+        : items.length === 0 ? <div className="tt-empty">还没有留言。发一条试试，设备屏幕左下角会出现「留言 N」提醒标识。</div>
+        : <div className="msg-list">
+            {items.map((m) => (
+              <div className={`msg-item${m.played ? "" : " unread"}`} key={m.id}>
+                {m.kind === "voice"
+                  ? <button className={`msg-play${playingId === m.id ? " playing" : ""}`} onClick={() => play(m)} aria-label="播放留言">
+                      {playingId === m.id ? <Square size={15} /> : <Play size={15} />}
+                    </button>
+                  : <span className="msg-texticon">文</span>}
+                <div className="msg-body">
+                  <div className="msg-meta"><b>{m.sender_name}</b>
+                    {m.kind === "voice"
+                      ? <span className="msg-voice-tag"><AudioLines size={13} />语音 {m.duration ? `${m.duration.toFixed(1)}″` : ""}</span>
+                      : null}
+                    <small>{messageTime(m.created_at)}{m.source === "device" ? " · 设备录音" : ""}{m.played ? " · 已听" : ""}</small>
+                  </div>
+                  {m.kind === "text" ? <div className="msg-content">{m.text}</div>
+                    : m.text ? <div className="msg-content">{m.text}</div> : null}
+                </div>
+                {!m.played ? <button className="button sm ghost" onClick={() => { markPlayed(m.id); notify("已标记为已听"); }}><Check size={14} />已听</button> : null}
+                <button className="button sm ghost danger" aria-label="删除留言" onClick={() => { stop(); remove(m.id); }}><Trash2 size={14} /></button>
+              </div>
+            ))}
+          </div>}
+    </div>
+  </>;
+}
+
+type ContentTab = "course" | "messages" | "notes" | "homework" | "reading" | "album" | "bills" | "express" | "schedule" | "shopping" | "anniversaries" | "history" | "watchlist" | "reco" | "portfolio" | "gold";
+
+// 内容 tabs 随场景联动：理财场景直接给自选股 / 推荐股 / 资金管理，不再混入作业、缴费等学习家庭模块
+const CONTENT_TABS_BY_SCENE: Record<SceneKey, ContentTab[]> = {
+  family: ["notes", "bills", "express", "schedule", "shopping", "anniversaries", "messages", "history"],
+  study: ["course", "messages", "notes", "homework", "reading", "album", "history"],
+  finance: ["watchlist", "reco", "portfolio", "gold", "notes", "history"],
+  health: ["notes", "messages", "history"],
+  office: ["notes", "album", "messages", "history"],
+  custom: ["notes", "album", "messages", "history"],
+};
+
+function ContentStudio({ content, setContent, save, savedAt, notify, apply, hasDevice, deviceMac, screen, sceneKey, aMode, bMode, user, device }: { content: ContentState; setContent: React.Dispatch<React.SetStateAction<ContentState>>; save: () => void; savedAt: string; notify: (m: string) => void; apply: () => void; hasDevice: boolean; deviceMac: string; screen: { size: "4.2" | "5.83"; colors: 2 | 3 | 4 }; sceneKey: SceneKey; aMode: string; bMode: string; user: User | null; device?: Device }) {
+  const { weatherPreview, weatherLoading, weatherError } = useDualWeatherPreview(sceneKey === "family" && aMode === "family-weather", deviceMac, content.weatherCity);
+  const [tab, setTab] = useState<ContentTab>("notes");
+  const messages = useMessages(deviceMac);
+  const sceneTabs = CONTENT_TABS_BY_SCENE[sceneKey] || CONTENT_TABS_BY_SCENE.family;
+  // 切场景后当前 tab 若不属于该场景，落到该场景第一个模块
+  useEffect(() => {
+    if (!sceneTabs.includes(tab)) setTab(sceneTabs[0]);
+  }, [sceneKey]);  // eslint-disable-line react-hooks/exhaustive-deps
+  const tabMeta: Record<ContentTab, { label: string; icon: React.ReactNode }> = {
+    course: { label: "课程表", icon: <CalendarDays size={16} /> },
+    messages: { label: "留言", icon: <MessageSquare size={16} /> },
+    notes: { label: "便签", icon: <StickyNote size={16} /> },
+    homework: { label: "今日作业", icon: <ListChecks size={16} /> },
+    reading: { label: "阅读任务", icon: <BookOpen size={16} /> },
+    album: { label: "相册", icon: <ImageIcon size={16} /> },
+    bills: { label: "缴费台账", icon: <WalletCards size={16} /> },
+    express: { label: "快递/取件码", icon: <Truck size={16} /> },
+    schedule: { label: "家庭日程", icon: <CalendarDays size={16} /> },
+    shopping: { label: "采购清单", icon: <ListChecks size={16} /> },
+    anniversaries: { label: "纪念日", icon: <Bell size={16} /> },
+    history: { label: "历史归档", icon: <History size={16} /> },
+    watchlist: { label: "自选股", icon: <TrendingUp size={16} /> },
+    reco: { label: "推荐股", icon: <Sparkles size={16} /> },
+    portfolio: { label: "资金管理", icon: <WalletCards size={16} /> },
+    gold: { label: "黄金/期货", icon: <Coins size={16} /> },
+  };
+  return <>
+    <div className="page-intro row"><div><span className="kicker">CONTENT STUDIO · {scenes[sceneKey].name.toUpperCase()}</span><h2>内容管理 · {scenes[sceneKey].name}场景</h2><p>当前场景只显示相关模块：{sceneTabs.map((k) => tabMeta[k].label).join(" / ")}。切换场景后内容配置自动跟随。</p></div><div className="save-state"><ShieldCheck size={17} />{savedAt ? `模式保存于 ${savedAt}` : "配置尚未保存"}</div></div>
     <DualPreview content={content} screen={screen} sceneKey={sceneKey} aMode={aMode} bMode={bMode} weatherPreview={weatherPreview} weatherLoading={weatherLoading} weatherError={weatherError} />
     <div className="content-tabs">
-      <button className={tab === "course" ? "active" : ""} onClick={() => setTab("course")}><CalendarDays size={16} />课程表</button>
-      <button className={tab === "notes" ? "active" : ""} onClick={() => setTab("notes")}><StickyNote size={16} />便签</button>
-      <button className={tab === "homework" ? "active" : ""} onClick={() => setTab("homework")}><ListChecks size={16} />今日作业</button>
-      <button className={tab === "reading" ? "active" : ""} onClick={() => setTab("reading")}><BookOpen size={16} />阅读任务</button>
-      <button className={tab === "album" ? "active" : ""} onClick={() => setTab("album")}><ImageIcon size={16} />相册</button>
-      <button className={tab === "bills" ? "active" : ""} onClick={() => setTab("bills")}><WalletCards size={16} />缴费台账</button>
-      <button className={tab === "express" ? "active" : ""} onClick={() => setTab("express")}><Truck size={16} />快递/取件码</button>
-      <button className={tab === "schedule" ? "active" : ""} onClick={() => setTab("schedule")}><CalendarDays size={16} />家庭日程</button>
-      <button className={tab === "shopping" ? "active" : ""} onClick={() => setTab("shopping")}><ListChecks size={16} />采购清单</button>
-      <button className={tab === "anniversaries" ? "active" : ""} onClick={() => setTab("anniversaries")}><Bell size={16} />纪念日</button>
-      <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}><History size={16} />历史归档</button>
+      {sceneTabs.map((k) => <button key={k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>
+        {tabMeta[k].icon}{tabMeta[k].label}
+        {k === "messages" && messages.unread > 0 ? <span className="tab-badge">{messages.unread}</span> : null}
+      </button>)}
     </div>
+    {tab === "watchlist"
+      ? <FinanceWatchlist user={user} notify={notify} device={device} embedded />
+      : tab === "reco"
+        ? <FinanceReco notify={notify} device={device} />
+        : tab === "portfolio"
+          ? <FinancePortfolio notify={notify} device={device} />
+          : tab === "gold"
+            ? <GoldFuturesPanel notify={notify} />
+            : null}
     {tab === "course"
       ? <CourseTableEditor value={content.courseTable} onChange={(ct) => setContent({ ...content, courseTable: ct })} notify={notify} />
-      : tab === "notes"
+      : tab === "messages"
+        ? <MessageBoardEditor deviceMac={deviceMac} hasDevice={hasDevice} unread={messages.unread} items={messages.items}
+            loading={messages.loading} notify={notify} addText={messages.addText} uploadVoice={messages.uploadVoice}
+            markPlayed={messages.markPlayed} markAllPlayed={messages.markAllPlayed} remove={messages.remove} />
+        : tab === "notes"
         ? <NotesEditor value={content.notes} onChange={(notes) => setContent({ ...content, notes })} notify={notify} />
         : tab === "homework"
           ? <HomeworkEditor value={content.homework} onChange={(homework) => setContent({ ...content, homework })} notify={notify} />
@@ -1109,7 +1991,9 @@ function ContentStudio({ content, setContent, save, savedAt, notify, apply, hasD
                       ? <FamilyListEditor title="家庭采购清单" value={content.familyShopping} onChange={(familyShopping) => setContent({ ...content, familyShopping })} />
                       : tab === "anniversaries"
                         ? <FamilyEventsEditor title="家庭纪念日" value={content.familyAnniversaries} onChange={(familyAnniversaries) => setContent({ ...content, familyAnniversaries })} />
-                        : <HistoryArchive content={content} setContent={setContent} notify={notify} />}
+                        : tab === "history"
+                          ? <HistoryArchive content={content} setContent={setContent} notify={notify} />
+                          : null}
     <div className="sticky-save"><div><b>保存双屏模式</b><span>课程表、便签、作业与阅读任务一并写入本地模式，与场景配置共用。</span></div><div className="save-actions"><button className="button primary" onClick={save}><Save size={16} />保存模式</button><button className="button soft" onClick={apply} disabled={!hasDevice} title={hasDevice ? "下发到所选设备" : "请先在设备管理绑定设备"}><Cloud size={16} />应用到设备</button></div></div>
   </>;
 }
@@ -2092,12 +2976,14 @@ function DualPreview({ content, screen, sceneKey, aMode, bMode, weatherPreview, 
           {family ? aMode === "family-weather"
             ? <WeatherBoard data={weatherPreview} loading={!!weatherLoading} error={weatherError || ""} city={content.weatherCity || "设备城市"} />
             : <FamilyTodayScreen content={content} mode={aMode} />
-            : aModePreview(mode, content)}
+            : sceneKey === "finance" && mode !== "notes"
+              ? <FinanceModePreview kind="a" mode={mode} />
+              : aModePreview(mode, content)}
         </div>
         <div className="dp-mid"><span>双屏协同</span></div>
         <div className="preview-card b">
           <div className="preview-meta"><span>实时预览 · B 屏</span><small>{dims} · {bColor}</small></div>
-          {family ? bMode === "calendar" ? <FamilyWeekScreen content={content} /> : bMode === "album" ? <AlbumPreview album={content.album} /> : <FamilyTodayScreen content={content} mode="family" /> : (() => {
+          {family ? bMode === "calendar" ? <FamilyWeekScreen content={content} /> : bMode === "album" ? <AlbumPreview album={content.album} /> : <FamilyTodayScreen content={content} mode="family" /> : sceneKey === "finance" ? <FinanceModePreview kind="b" mode={bMode || "finance-trend"} /> : (() => {
             const todayIdx = (new Date().getDay() + 6) % 7;
             const hasCourse = (content.courseTable.periods || []).some((_, p) => !!content.courseTable.grid?.[todayIdx]?.[p]?.name);
             return !hasCourse && (content.album?.photos?.length || 0) > 0

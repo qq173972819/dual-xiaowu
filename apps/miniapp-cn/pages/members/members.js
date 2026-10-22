@@ -55,6 +55,11 @@ Page({
       });
   },
 
+  // 老师邀请：仅学习场景使用，由家长在成员页发起，不作为独立菜单
+  goTeacherAuth() {
+    wx.navigateTo({ url: '/pages/teacher-auth/teacher-auth' });
+  },
+
   remove(e) {
     const ds = e.currentTarget.dataset;
     if (ds.role === 'owner') { wx.showToast({ title: '所有者不可移除', icon: 'none' }); return; }

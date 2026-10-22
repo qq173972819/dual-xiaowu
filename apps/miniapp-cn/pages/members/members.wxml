@@ -28,6 +28,14 @@
         </view>
       </view>
     </view>
+    <view class="card">
+      <view class="card-row">
+        <view class="card-title">邀请老师</view>
+        <text class="tag">仅学习场景</text>
+      </view>
+      <view class="page-sub">孩子用于学习场景时，家长可生成 6 位授权码发给老师；老师免注册，凭码推送便签或作业。家庭、养生、办公等场景无需操作。</view>
+      <button class="btn btn-secondary btn-block" bindtap="goTeacherAuth">生成老师邀请码</button>
+    </view>
   </block>
 
   <view class="hint">提示：成员体系复用小悟AI 账号；设备绑定、解绑与权限仍由原登录账号的所有者权限控制。</view>

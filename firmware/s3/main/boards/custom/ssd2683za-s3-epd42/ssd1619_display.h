@@ -31,7 +31,11 @@ public:
     // 直接用 caller 提供的帧缓冲刷新画面。
     // frame: 50*300=15000 字节，1-bit/行/MSB 左白 1/黑 0。
     // partial=true: 差分快刷；false: 全刷清残影。
+    // 刷新成功后，这块外部帧"占住"屏幕：LVGL 仪表盘的周期性重绘不会再刷
+    // 上来把它盖掉（实机上表现为"刷完就被仪表盘覆盖，看着像没刷新"）。
+    // 按键导航或语音会话会调 ReleaseExternalFrameHold() 交还控制权。
     void RawFrameRefresh(const uint8_t* frame, bool partial);
+    void ReleaseExternalFrameHold();
 
     bool IsPanelBusy() const {
         if (busy_idle_level_ < 0 || panel_faulted_) return false;
@@ -71,6 +75,8 @@ private:
     gpio_num_t cs_pin_ = EPD_CS_PIN;
     gpio_num_t busy_pin_ = EPD_BUSY_PIN;
     bool panel_probed_ = false;
+    // 外部帧（InkSight / 双屏 A 便签）已上屏，仪表盘不得抢占，直到按键或会话。
+    bool hold_external_frame_ = false;
     EpaperDashboard dashboard_;
 
     static void FlushCallback(lv_display_t* display, const lv_area_t* area,

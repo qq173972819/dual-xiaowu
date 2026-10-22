@@ -1,0 +1,12 @@
+{
+  "id": "market-data",
+  "name": "行情数据（平台级）",
+  "version": "0.1.0",
+  "type": "platform",
+  "category": "finance",
+  "description": "平台侧统一采购的数据源（如 iFinD / Wind / 东方财富等持牌 API），平台持有密钥，所有用户零绑定直接可用。不绑定、也不接触用户的个人证券账号。",
+  "guide": [],
+  "permissions": ["connector.market.read"],
+  "risk": "low",
+  "disclaimer": "行情数据仅供参考，不构成投资建议。"
+}

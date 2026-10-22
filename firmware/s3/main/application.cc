@@ -92,6 +92,18 @@ void Application::Initialize() {
     // Add state change listeners
     state_machine_.AddStateChangeListener([this](DeviceState old_state, DeviceState new_state) {
         xEventGroupSetBits(event_group_, MAIN_EVENT_STATE_CHANGED);
+        // 语音通道常开时 OnAudioChannelOpened 不会再触发，而板级定时刷新
+        // 结束后会把 WiFi 切回省电 —— 会话因此整段跑在 MAX_MODEM 省电下，
+        // MQTT 下行音频大量丢包（wrong sequence），表现为说话断断续续。
+        // 会话期间强制高性能；回 idle 后恢复省电（活跃模式下刷屏循环会再切回）。
+        auto& board = Board::GetInstance();
+        if (new_state == kDeviceStateConnecting || new_state == kDeviceStateListening ||
+            new_state == kDeviceStateSpeaking) {
+            board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+        } else if (new_state == kDeviceStateIdle &&
+                   (old_state == kDeviceStateListening || old_state == kDeviceStateSpeaking)) {
+            board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+        }
     });
 
     // Start the clock timer to update the status bar

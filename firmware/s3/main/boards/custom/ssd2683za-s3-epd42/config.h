@@ -155,11 +155,13 @@
 // ---------------------------------------------------------------------------
 // InkSight /api/render backend. Leave empty to configure at runtime via
 // the self.epaper.set_inksight_server(...) MCP tool. Otherwise fill with a
-// reachable base URL, e.g. "http://192.168.1.4:8092" for local testing (no trailing slash,
-// no /api/... suffix). The runtime MCP setting overrides this macro.
+// reachable base URL, e.g. "http://192.168.101.69:8104" for local testing (no
+// trailing slash, no /api/... suffix). The runtime MCP setting overrides this
+// macro. NOTE: 后端统一端口为 8104（见仓库 README）；本值是局域网调试默认，
+// 换网段后需同步更新，或改用固定域名 / 路由器 DHCP 静态分配避免 IP 漂移。
 // ---------------------------------------------------------------------------
 #ifndef INKSIGHT_DEFAULT_SERVER_URL
-#  define INKSIGHT_DEFAULT_SERVER_URL  "http://192.168.1.4:8092"
+#  define INKSIGHT_DEFAULT_SERVER_URL  "http://192.168.101.69:8104"
 #endif
 
 // Restricted credential accepted only by the product backend's LightAcade

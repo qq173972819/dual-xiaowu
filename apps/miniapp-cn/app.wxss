@@ -294,6 +294,15 @@ page {
   margin-top: 40rpx;
 }
 
+.teacher-entry {
+  text-align: center;
+  font-size: 22rpx;
+  color: #6a6c64;
+  margin-top: 18rpx;
+  text-decoration: underline;
+  text-underline-offset: 6rpx;
+}
+
 /* —— dual 功能对齐新增：表单 / 课程表 / 列表 —— */
 .section-label {
   font-size: 24rpx;
@@ -393,3 +402,8 @@ page {
   height: 2rpx;
   opacity: 0;
 }
+
+/* —— 理财场景：涨红跌绿 —— */
+.fin-num { font-weight: 700; font-size: 26rpx; }
+.fin-num.up { color: #d54941; }
+.fin-num.down { color: #1f9d55; }

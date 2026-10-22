@@ -4,8 +4,8 @@ const api = require('../../utils/api.js');
 Page({
   data: {},
 
-  // 家长一键登录：微信授权 + 换取会话，再进入设备选择
-  onParent() {
+  // 微信一键登录：微信授权 + 换取会话，再进入设备选择
+  onLogin() {
     wx.showLoading({ title: '登录中', mask: true });
     wx.login({
       success: (res) => {
@@ -31,7 +31,7 @@ Page({
     });
   },
 
-  // 老师通道：免注册，直接到授权码校验页
+  // 老师通道：凭家长提供的授权码进入，直接到授权码校验页
   onTeacher() {
     const g = getApp().globalData;
     g.role = 'teacher';

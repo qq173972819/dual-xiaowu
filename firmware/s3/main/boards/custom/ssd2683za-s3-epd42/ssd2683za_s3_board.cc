@@ -133,8 +133,14 @@ private:
 
     int EffectiveRefreshMinutes() const {
         Settings settings("inksight", false);
-        const int configured = settings.GetInt("clr_ref_min", 30);
-        return configured > 0 ? configured : 30;
+        const int clr = settings.GetInt("clr_ref_min", 30);
+        // 双屏（FPC2 在线）：B 屏课程表按彩屏间隔（默认 30 分钟）整对刷新。
+        if (dual_mode_.load()) return clr > 0 ? clr : 30;
+        // 单屏/降级（FPC2 探测失败）：A 屏跟随后端 X-Refresh-Minutes
+        // （/api/render DUAL_A 下发 5 分钟），不再陪跑彩屏的 30 分钟周期。
+        const int a = settings.GetInt("a_ref_min", 0);
+        if (a > 0) return a;
+        return clr > 0 ? clr : 30;
     }
 
     void ApplyPowerMode() {
@@ -221,10 +227,19 @@ private:
         if (!candidate->Init()) {
             delete candidate;
             ESP_LOGW(kTag, "FPC2 SSD2683ZA initialization failed; keeping FPC1 active");
+            // FPC2 挂了也必须起刷新任务：InkSight 内容（尤其是未绑定的配对码）
+            // 会降级显示在 FPC1。没有这个任务设备永远不会去拉 /api/render，
+            // 屏幕上就永远看不到配对码。
+            if (color_refresh_task_ == nullptr &&
+                xTaskCreate(ColorRefreshTask, "color_refresh", 4096, this, 3,
+                            &color_refresh_task_) != pdPASS) {
+                ESP_LOGW(kTag, "Cannot create color refresh task");
+            }
             return;
         }
         color_screen_ = candidate;
-        if (xTaskCreate(ColorRefreshTask, "color_refresh", 4096, this, 3,
+        if (color_refresh_task_ == nullptr &&
+            xTaskCreate(ColorRefreshTask, "color_refresh", 4096, this, 3,
                         &color_refresh_task_) != pdPASS) {
             ESP_LOGW(kTag, "Cannot create color refresh task");
         }
@@ -742,18 +757,21 @@ private:
                 if (dual_changed && self->dual_mode_.load()) {
                     self->dual_refresh_pending_.store(true);
                 }
+                // 后端 X-Pending-Refresh：内容后台点了「应用到设备」→ 立即刷。
+                const bool pending_now = InkSightClient::TakePendingRefresh();
                 auto& dashboard = self->display_->dashboard();
-                if (dashboard.IsConversation() && !device_unbound) {
+                if (dashboard.IsConversation() && !device_unbound &&
+                    !pending_now) {
                     // 配置版本已经记为 pending；语音结束后的下一分钟再刷，
                     // 避免 A 屏在会话过程中被后台内容覆盖。
                     return;
                 }
                 if (self->dual_mode_.load()) {
-                    if (regular_refresh_due ||
+                    if (regular_refresh_due || pending_now ||
                         self->dual_refresh_pending_.exchange(false)) {
                         self->RefreshDualScreens();
                     }
-                } else if (regular_refresh_due) {
+                } else if (regular_refresh_due || pending_now) {
                     self->RefreshInkSight(false);
                 }
             });
@@ -806,6 +824,8 @@ private:
         // 下载期间临时切 PERFORMANCE，结束后恢复。
         SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
         bool ok = false;
+        bool device_unbound = false;
+        std::string pair_code;
         for (int attempt = 1; attempt <= 3 && !ok; ++attempt) {
             if (inksight_cancel_.load()) {
                 ESP_LOGI(kTag, "InkSight refresh cancelled by user");
@@ -820,7 +840,8 @@ private:
             }
             ok = InkSightClient::Load(
                 GetNetwork(), inksight_server_, persona,
-                SystemInfo::GetMacAddress(), inksight_frame_, error);
+                SystemInfo::GetMacAddress(), inksight_frame_, error,
+                nullptr, -1, &device_unbound, &pair_code);
         }
         SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
         if (!ok) {
@@ -835,7 +856,21 @@ private:
         }
         display_->RawFrameRefresh(inksight_frame_,
                                   !initial_full_refresh /* partial */);
-        display_->dashboard().SetInkSightFooter("OK刷新 · 长按返回");
+        const bool was_unbound = inksight_device_unbound_.exchange(device_unbound);
+        if (device_unbound) {
+            display_->dashboard().SetInkSightFooter(
+                pair_code.empty() ? "未绑定：配对码见 FPC1 · OK刷新"
+                                  : "未绑定 · 配对码 " + pair_code + " · 后台输入绑定");
+            // FPC2 不可用时配对码只画在 FPC1，用户不翻到看板页就永远看不到，
+            // 所以未绑定状态下自动切一次（was_unbound 保证只切一次，不会递归）。
+            if (!was_unbound && !display_->dashboard().IsInkSight()) {
+                ESP_LOGI(kTag, "未绑定：自动切到 InkSight 页显示配对码 %s",
+                         pair_code.c_str());
+                display_->dashboard().Show(EpaperDashboard::Page::kInkSight);
+            }
+        } else {
+            display_->dashboard().SetInkSightFooter("OK刷新 · 长按返回");
+        }
         ESP_LOGI(kTag, "InkSight refreshed (%s)",
                  initial_full_refresh ? "full" : "partial");
         cleanup();
@@ -1202,6 +1237,9 @@ private:
                 else { raw[i] = value; samples[i] = 1; }
                 if (samples[i] < 3 || stable[i] == value) continue;
                 stable[i] = value;
+                // 任何按键动作都要把屏幕从外部画面（InkSight / 双屏 A 便签）
+                // 交还给仪表盘，否则按键后看不到任何界面变化。
+                self->display_->ReleaseExternalFrameHold();
                 ESP_LOGI(kTag, "KEY GPIO%d stable=%d", pins[i], value);
                 if (value == 0) {
                     pressed_at[i] = now;
@@ -1410,14 +1448,37 @@ private:
                         return true;
                     });
         mcp.AddTool("self.epaper.refresh_dual",
-                    "立即拉取双屏后台（dual-config）并刷新 A/B 屏：A 屏便签、B 屏今日课程表。需先在双屏后台点「应用到设备」。",
+                    "立即拉取双屏后台（dual-config）并刷新 A/B 两屏。A、B 各显示什么由后台场景配置决定："
+                    "学习场景通常是 A 便签 + B 课程表；理财场景是 A 自选行情 + B 某只证券的日 K 图。",
                     PropertyList(),
                     [this](const PropertyList&) -> ReturnValue {
                         Application::GetInstance().Schedule([this]() {
                             ProbeDualMode();
                             RefreshDualScreens();
                         });
-                        return std::string("已开始刷新双屏内容（A 便签 / B 课程表）");
+                        return std::string("已开始刷新双屏内容（按后台场景配置）");
+                    });
+        mcp.AddTool("self.epaper.set_kline",
+                    "把 B 屏切换成某只股票/指数的日 K 图（理财场景）。query 可填 6 位代码或中文名称，"
+                    "例如 688018、600519、乐鑫科技、贵州茅台、上证指数。A 屏会同步切到自选行情列表。"
+                    "切换后会立即刷新双屏，几秒内生效。",
+                    PropertyList({Property("query", kPropertyTypeString)}),
+                    [this](const PropertyList& properties) -> ReturnValue {
+                        const std::string query = properties["query"].value<std::string>();
+                        if (query.empty()) return std::string("缺少股票名称或代码");
+                        std::string name, error;
+                        const bool ok = InkSightClient::SetFinanceKline(
+                            GetNetwork(), inksight_server_,
+                            SystemInfo::GetMacAddress(), query, &name, &error);
+                        if (!ok) {
+                            return std::string("切换失败：") + (error.empty() ? "未知错误" : error);
+                        }
+                        ESP_LOGI(kTag, "B 屏 K 线切换为 %s（%s）", name.c_str(), query.c_str());
+                        Application::GetInstance().Schedule([this]() {
+                            ProbeDualMode();
+                            RefreshDualScreens();
+                        });
+                        return std::string("已把 B 屏切换为 ") + name + " 的日 K 图，正在刷新";
                     });
         mcp.AddTool("self.epaper.set_color_refresh_minutes",
                     "设置 FPC2 SSD2683ZA 四色屏自动刷新间隔（分钟，1~1440；0=关闭自动刷新）。",
@@ -1533,7 +1594,12 @@ public:
             inksight_server_ == "http://nas.insane.vip:8080" ||
             inksight_server_ == "nas.insane.vip:8080" ||
             inksight_server_ == "http://nas.insane.vip:8090" ||
-            inksight_server_ == "nas.insane.vip:8090") {
+            inksight_server_ == "nas.insane.vip:8090" ||
+            // 旧编译期默认值：192.168.1.x 网段 + 8092 老端口（后端现已统一到
+            // 8104，PC 也换到 192.168.101.x 网段）。已烧录这些固件的机器开机
+            // 自动迁移到新的 INKSIGHT_DEFAULT_SERVER_URL。
+            inksight_server_ == "http://192.168.1.4:8092" ||
+            inksight_server_ == "192.168.1.4:8092") {
             inksight_server_ = INKSIGHT_DEFAULT_SERVER_URL;
             InkSightClient::SaveServerUrl(inksight_server_);
             ESP_LOGI(kTag, "Migrated InkSight server to %s",
@@ -1587,6 +1653,12 @@ public:
             [this, callback = std::move(callback)](
                 NetworkEvent event, const std::string& data) {
                 if (callback) callback(event, data);
+                if (event == NetworkEvent::Disconnected) {
+                    // StartConfigAp() 会先停 station 并广播 Disconnected，
+                    // 之后才启动配网门户的 httpd。这里提前释放 8080 编辑器，
+                    // 保证配网时只有一个 httpd 实例（联网后会自动重启）。
+                    if (todo_web_ && todo_web_->IsRunning()) todo_web_->Stop();
+                }
                 if (event == NetworkEvent::Connected) {
                     Application::GetInstance().Schedule([this]() {
                         ApplyPowerMode();

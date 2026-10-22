@@ -3,3 +3,4 @@ uvicorn[standard]>=0.30,<1
 pydantic>=2.5,<3
 Pillow>=10,<14
 python-multipart>=0.0.20
+cryptography>=42,<46

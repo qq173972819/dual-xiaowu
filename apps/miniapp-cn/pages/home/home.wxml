@@ -77,7 +77,7 @@
     <view class="card-row">
       <view>
         <view class="card-title">👥 共享成员</view>
-        <view class="card-desc">邀请家人 / 同事共同维护设备</view>
+        <view class="card-desc">邀请家人协作；学习场景可在成员页邀请老师</view>
       </view>
       <view class="tag">去管理</view>
     </view>
@@ -103,13 +103,13 @@
     </view>
   </view>
 
-  <view class="card" bindtap="goTeacherAuth">
+  <view class="card" bindtap="goConnectors">
     <view class="card-row">
       <view>
-        <view class="card-title">🔑 老师授权</view>
-        <view class="card-desc">生成 / 冻结 6 位授权码</view>
+        <view class="card-title">🔗 连接器</view>
+        <view class="card-desc">第三方账号一键绑定与授权管理</view>
       </view>
-      <view class="tag">去管理</view>
+      <view class="tag">去绑定</view>
     </view>
   </view>
 

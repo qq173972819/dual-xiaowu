@@ -121,11 +121,94 @@ function handleMock(path, method, data) {
     wx.setStorageSync('mock_service_cfg', saved);
     return { ok: true, key: data.key, configured: !!data.value };
   }
+  // 连接器（第三方账号绑定）：本地模拟，保证演示模式可用
+  if (path === '/api/v1/mobile/connectors' && method === 'GET') {
+    const bound = wx.getStorageSync('mock_connectors') || [];
+    return [
+      { id: 'market-data', name: '行情数据（平台级）', type: 'platform', category: 'finance', description: '平台统一采购的数据源，所有用户零绑定直接可用。', auth_kind: 'none', guide: [], status: 'included', status_label: '无需绑定，已开通', bind_url: '' },
+      { id: 'demo-oauth', name: '示例 OAuth 连接器', type: 'user', category: 'demo', description: '演示用户级 OAuth 授权绑定流程。', auth_kind: 'oauth2', guide: ['点击「去授权」并在授权页确认', '授权完成后返回本页，状态变为「已绑定」'], status: bound.indexOf('demo-oauth') >= 0 ? 'bound' : 'unbound', status_label: bound.indexOf('demo-oauth') >= 0 ? '已绑定' : '去授权', external_account: bound.indexOf('demo-oauth') >= 0 ? 'demo-user@demo-oauth' : '', bind_url: '' }
+    ];
+  }
+  if (path === '/api/v1/mobile/connectors/demo-oauth/authorize' && method === 'POST') {
+    const bound = wx.getStorageSync('mock_connectors') || [];
+    if (bound.indexOf('demo-oauth') < 0) bound.push('demo-oauth');
+    wx.setStorageSync('mock_connectors', bound);
+    return { authorize_url: 'mock://authorize?demo=1', state: 'mock_state' };
+  }
+  if (path === '/api/v1/mobile/connectors/demo-oauth/unbind' && method === 'POST') {
+    const bound = (wx.getStorageSync('mock_connectors') || []).filter(function (id) { return id !== 'demo-oauth'; });
+    wx.setStorageSync('mock_connectors', bound);
+    return { status: 'unbound' };
+  }
+  // 理财：自选 / 推荐 / 持仓（本地演示数据，涨红跌绿）
+  if (path === '/api/finance/watchlist' && method === 'GET') {
+    return { watchlist: wx.getStorageSync('mock_watchlist') || [{ code: '600519', name: '贵州茅台' }, { code: '600036', name: '招商银行' }] };
+  }
+  if (path === '/api/finance/watchlist' && method === 'POST') {
+    const parts = String(data.codes || '').split(/[\s,，;；]+/).filter(Boolean).slice(0, 8);
+    const list = parts.map((c) => ({ code: c.replace(/^(sh|sz|bj)/, ''), name: '股票' + c.slice(-4) }));
+    wx.setStorageSync('mock_watchlist', list);
+    return { ok: true, watchlist: list };
+  }
+  if (path.indexOf('/api/finance/watchlist/') === 0 && method === 'DELETE') {
+    const code = path.split('/').pop().toLowerCase();
+    const list = (wx.getStorageSync('mock_watchlist') || []).filter((x) => String(x.code).toLowerCase() !== code);
+    wx.setStorageSync('mock_watchlist', list);
+    return { ok: true, watchlist: list };
+  }
+  if (path.indexOf('/api/finance/search') === 0 && method === 'GET') {
+    const q = decodeURIComponent((path.split('q=')[1] || ''));
+    const dict = { '茅台': ['600519', '贵州茅台'], '招行': ['600036', '招商银行'], '招商银行': ['600036', '招商银行'], '宁德': ['300750', '宁德时代'], '乐鑫': ['688018', '乐鑫科技'] };
+    const hit = dict[q];
+    if (/^\d{6}$/.test(q)) return { items: [{ code: q, name: '' }] };
+    return { items: hit ? [{ code: hit[0], name: hit[1] }] : [] };
+  }
+  if (path === '/api/finance/gold') {
+    return {
+      items: [
+        { code: 'aum', name: '沪金主连', price: 886.4, pct: -0.41 },
+        { code: 'agm', name: '沪银主连', price: 13780.0, pct: -1.73 },
+        { code: 'GC00Y', name: 'COMEX黄金', price: 4130.1, pct: -0.48 },
+        { code: 'AUTD', name: '黄金T+D', price: 884.91, pct: -0.14 },
+        { code: 'jm', name: '焦炭主连', price: 1926.5, pct: -0.95 }
+      ],
+      updated_at: ''
+    };
+  }
+  if (path === '/api/finance/recommend') {
+    return {
+      items: [
+        { code: '300750', name: '宁德时代', price: 212.6, pct: 3.2, reason: '日内动量走强' },
+        { code: '600519', name: '贵州茅台', price: 1502.0, pct: 1.1, reason: '温和上行' },
+        { code: '601899', name: '紫金矿业', price: 18.4, pct: 0.6, reason: '温和上行' }
+      ],
+      disclaimer: '推荐结果为公开行情的规则化排序，仅供参考，不构成投资建议'
+    };
+  }
+  if (path === '/api/finance/portfolio' && method === 'GET') {
+    const p = wx.getStorageSync('mock_portfolio') || { cash: 20000, positions: [{ code: '600519', name: '贵州茅台', shares: 100, cost: 1400 }, { code: '600036', name: '招商银行', shares: 1000, cost: 40 }] };
+    const px = { 600519: 1502.0, 600036: 33.2 };
+    let mv = 0, cost = 0;
+    const positions = p.positions.map((x) => {
+      const price = px[x.code] || x.cost;
+      const value = price * x.shares;
+      mv += value; cost += x.cost * x.shares;
+      return Object.assign({}, x, { price: price, value: value, pnl: (price - x.cost) * x.shares, pnl_pct: (price / x.cost - 1) * 100, weight: null, advice: '持有观察' });
+    });
+    positions.forEach((x) => { x.weight = mv ? x.value / mv * 100 : 0; });
+    return { positions: positions, summary: { market_value: mv, cost_value: cost, pnl: mv - cost, pnl_pct: cost ? (mv / cost - 1) * 100 : null, cash: p.cash, count: positions.length }, notes: [], disclaimer: '调仓参考为规则化提示，不构成投资建议' };
+  }
+  if (path === '/api/finance/portfolio' && method === 'POST') {
+    wx.setStorageSync('mock_portfolio', { cash: data.cash || 0, positions: data.positions || [] });
+    return { ok: true, count: (data.positions || []).length };
+  }
+  if (path === '/api/finance/watchlist/apply' || path === '/api/finance/portfolio/apply') {
+    return { ok: true, message: '已写入设备，下次唤醒刷新生效' };
+  }
   // 老师授权：列表 / 生成 / 冻结
   if (path.indexOf('/api/teacher-auth/list') === 0 && method === 'GET') {
     return { items: wx.getStorageSync('mock_teacher_auth') || [] };
-  }
-  if (path === '/api/teacher-auth/generate' && method === 'POST') {
+  }  if (path === '/api/teacher-auth/generate' && method === 'POST') {
     const list = wx.getStorageSync('mock_teacher_auth') || [];
     const rec = {
       id: Date.now(),
@@ -372,9 +455,60 @@ const api = {
     return request('/api/device/' + (mac || '') + '/sync', 'POST', {});
   },
 
+  // —— 理财场景：自选股 / 行情 / 推荐股 / 资金管理 ——
+  getFinanceWatchlist() {
+    return request('/api/finance/watchlist', 'GET');
+  },
+  saveFinanceWatchlist(codes) {
+    return request('/api/finance/watchlist', 'POST', { codes: codes });
+  },
+  deleteFinanceWatchlist(code) {
+    return request('/api/finance/watchlist/' + encodeURIComponent(code), 'DELETE');
+  },
+  getFinanceQuotes(codes) {
+    return request('/api/finance/quote?codes=' + encodeURIComponent((codes || []).join(',')), 'GET');
+  },
+  getFinanceRecommend() {
+    return request('/api/finance/recommend', 'GET');
+  },
+  getFinanceGold() {
+    return request('/api/finance/gold', 'GET');
+  },
+  financeSearch(q) {
+    return request('/api/finance/search?q=' + encodeURIComponent(q), 'GET');
+  },
+  getFinancePortfolio() {
+    return request('/api/finance/portfolio', 'GET');
+  },
+  saveFinancePortfolio(cash, positions) {
+    return request('/api/finance/portfolio', 'POST', { cash: cash || 0, positions: positions });
+  },
+  applyFinanceToDevice(mac) {
+    return request('/api/finance/watchlist/apply', 'POST', { mac: mac });
+  },
+  applyFinancePortfolioToDevice(mac) {
+    return request('/api/finance/portfolio/apply', 'POST', { mac: mac });
+  },
+
   // 双屏快照预览地址
   getSnapshot(mac, screen) {
     return request('/api/device/snapshot?mac=' + encodeURIComponent(mac) + '&screen=' + (screen || 'a'), 'GET');
+  },
+
+  // ——— 连接器（第三方账号绑定）———
+  // 列表：platform → 无需绑定已开通；user → 已绑定 / 去授权
+  listConnectors() {
+    return request('/api/v1/mobile/connectors', 'GET');
+  },
+
+  // 发起授权：返回第三方授权页地址（页面引导用户打开或复制）
+  authorizeConnector(connectorId) {
+    return request('/api/v1/mobile/connectors/' + connectorId + '/authorize', 'POST', {});
+  },
+
+  // 解除绑定：平台立即删除该用户此连接器的全部凭据
+  unbindConnector(connectorId) {
+    return request('/api/v1/mobile/connectors/' + connectorId + '/unbind', 'POST', {});
   }
 };
 

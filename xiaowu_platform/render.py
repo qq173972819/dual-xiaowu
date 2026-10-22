@@ -37,14 +37,28 @@ _WEEKDAY_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周�
 
 
 # ── 字体 / 打包助手 ──────────────────────────────────────────
-def _load_cjk(size: int):
-    """加载自带中文衬线字体；缺失或失败时回落到 Pillow 默认字体，绝不崩溃。"""
-    try:
-        path = _FONT_DIR / "NotoSerifSC-Regular.ttf"
-        if path.is_file():
-            return ImageFont.truetype(str(path), size)
-    except Exception:  # noqa: BLE001
-        pass
+def _load_cjk(size: int, bold: bool = False):
+    """加载中文黑体（优先自带 Noto Sans SC）；逐级回落，绝不崩溃。
+
+    顺序：Noto Sans SC（Regular/Bold）→ Noto Serif SC → 系统微软雅黑/
+    Noto CJK（Linux）/ 苹方（macOS）→ Pillow 默认字体。
+    """
+    candidates: list[Path] = [
+        _FONT_DIR / ("NotoSansSC-Bold.otf" if bold else "NotoSansSC-Regular.otf"),
+        _FONT_DIR / "NotoSerifSC-Regular.ttf",
+    ]
+    if bold:
+        candidates.append(Path("C:/Windows/Fonts/msyhbd.ttc"))
+        candidates.append(Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"))
+    candidates.append(Path("C:/Windows/Fonts/msyh.ttc"))
+    candidates.append(Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"))
+    candidates.append(Path("/System/Library/Fonts/PingFang.ttc"))
+    for path in candidates:
+        try:
+            if path.is_file():
+                return ImageFont.truetype(str(path), size)
+        except Exception:  # noqa: BLE001
+            continue
     return ImageFont.load_default()
 
 
@@ -702,9 +716,40 @@ def render_family_express_bills(express: list[dict], bills: list[dict], w: int, 
     return img
 
 
-def render_dual_screen(mac: str, screen: str, w: int, h: int, colors: int,
-                       dual_config: Optional[dict],
-                       battery: Optional[int] = None) -> Image.Image:
+def _draw_message_badge(img: Image.Image, unread: int, colors: int = 2) -> Image.Image:
+    """在设备画面左下角叠加「未读留言」徽标。
+
+    黑白屏：黑底白字；三色/四色屏：红底白字（更醒目）。
+    白色外描边保证它叠在便签/课程表内容上依然清晰可辨。
+    固件侧看到徽标即提示有留言，播放后（played_at 有值）徽标自动消失。
+    """
+    if unread <= 0:
+        return img
+    w, h = img.size
+    scale = w / 400.0
+    draw = ImageDraw.Draw(img)
+    is_palette = img.mode == "P"
+    bg = 3 if (is_palette and colors >= 3) else 0  # 索引 3=红，0=黑
+    plate = 1  # 索引 1=白（mode "1" 下 1 也是白）
+    text = f"留言 {unread}" if unread < 100 else "留言 99+"
+    font = _load_cjk(max(11, int(13 * scale)))
+    pad_x = max(4, int(7 * scale))
+    bh = font.size + max(6, int(8 * scale))
+    x0 = int(10 * scale)
+    y0 = h - bh - int(8 * scale)
+    x1 = x0 + _text_w(draw, text, font) + pad_x * 2
+    y1 = y0 + bh
+    outline = max(1, int(2 * scale))
+    draw.rounded_rectangle([x0 - outline, y0 - outline, x1 + outline, y1 + outline],
+                           radius=max(2, int(4 * scale)), fill=plate)
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=max(2, int(3 * scale)), fill=bg)
+    draw.text((x0 + pad_x, y0 + max(2, int(4 * scale))), text, fill=plate, font=font)
+    return img
+
+
+def _render_dual_screen_inner(mac: str, screen: str, w: int, h: int, colors: int,
+                              dual_config: Optional[dict],
+                              battery: Optional[int] = None) -> Image.Image:
     """统一入口：screen='A' 渲染便签/作业/阅读/相册/场景，screen='B' 渲染课程表/相册/场景。"""
     try:
         if screen == "A":
@@ -763,6 +808,13 @@ def render_dual_screen(mac: str, screen: str, w: int, h: int, colors: int,
                         rows = list(modules)
                         footer = "家庭共享提醒"
                 return render_scene_modules("家庭提醒" if mode == "family" else (a_cfg.get("title") or "家庭提醒"), rows, w, h, colors, footer)
+            # 理财场景：A 屏自选行情 / 市场摘要（实时拉取东财公开接口，失败回落通用看板）
+            if scene_key == "finance" and mode in ("finance-watch", "finance-summary"):
+                try:
+                    from . import finance as _finance
+                    return _finance.render_a_screen(a_cfg, cfg_root, w, h, mac=mac)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("[FINANCE] A screen fallback: %s", exc)
             if scene_key in ("family", "health", "finance", "office", "custom") and mode not in ("notes", "homework", "reading", "album"):
                 modules = a_cfg.get("modules") or []
                 footer = ""
@@ -801,6 +853,13 @@ def render_dual_screen(mac: str, screen: str, w: int, h: int, colors: int,
             if b_mode == "family":
                 rows = rows[:3] + [str(x) for x in (b_cfg.get("modules") or []) if str(x).strip()][:3]
             return render_scene_modules("家庭共享看板" if b_mode == "family" else "家庭日程", rows or ["暂无家庭日程"], w, h, colors, f"共 {len(events)} 项安排")
+        # 理财场景：B 屏行情趋势 → 首只自选的日 K 蜡烛图（失败回落通用看板）
+        if scene_key == "finance" and b_mode in ("finance-trend", "finance-kline"):
+            try:
+                from . import finance as _finance
+                return _finance.render_b_screen(b_cfg, cfg_root, w, h, colors, mac=mac)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[FINANCE] B screen fallback: %s", exc)
         if scene_key != "study" or b_mode != "course":
             footer = ""
             if scene_key == "finance":
@@ -820,6 +879,19 @@ def render_dual_screen(mac: str, screen: str, w: int, h: int, colors: int,
         draw = ImageDraw.Draw(img)
         draw.text((int(14 * scale), int(70 * scale)),
                   "课程表/便签渲染失败", fill=0, font=_load_cjk(max(13, int(16 * scale))))
+        return img
+
+
+def render_dual_screen(mac: str, screen: str, w: int, h: int, colors: int,
+                       dual_config: Optional[dict],
+                       battery: Optional[int] = None,
+                       unread_messages: int = 0) -> Image.Image:
+    """渲染双屏画面，并在有未读留言时叠加提醒徽标。"""
+    img = _render_dual_screen_inner(mac, screen, w, h, colors, dual_config, battery=battery)
+    try:
+        return _draw_message_badge(img, int(unread_messages or 0), colors)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[DUAL-RENDER] message badge failed: %s", exc)
         return img
 
 

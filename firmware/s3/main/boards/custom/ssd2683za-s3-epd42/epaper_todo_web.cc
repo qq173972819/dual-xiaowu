@@ -99,16 +99,33 @@ std::string ReadBody(httpd_req_t* req) {
 
 EpaperTodoWeb::EpaperTodoWeb(std::function<void(const char* kind)> changed)
     : changed_(std::move(changed)) {}
-EpaperTodoWeb::~EpaperTodoWeb() { if (server_) httpd_stop(server_); }
+EpaperTodoWeb::~EpaperTodoWeb() { Stop(); }
+
+void EpaperTodoWeb::Stop() {
+    if (!server_) return;
+    httpd_handle_t server = server_;
+    server_ = nullptr;  // 先置空，避免并发/重入时重复 stop 同一个句柄
+    httpd_stop(server);
+}
 
 bool EpaperTodoWeb::Start() {
     if (server_) return true;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     // Keep port 80 free for Xiaozhi's Wi-Fi provisioning/captive portal.
     config.server_port = 8080;
+    // 控制套接字端口必须全局唯一：esp-wifi-connect 的配网门户也用
+    // HTTPD_DEFAULT_CONFIG()（ctrl_port = 32768）。两个 httpd 实例抢同一个
+    // ctrl socket 会让配网门户的 httpd_start() 失败，进而被组件里的
+    // ESP_ERROR_CHECK 打挂 → 长按按键直接进入配网时整机重启。
+    config.ctrl_port = 32769;
     config.stack_size = 8192;
     config.max_uri_handlers = 8;
-    if (httpd_start(&server_, &config) != ESP_OK) return false;
+    // 局域网内并发极少，压低会话数（默认 7），给配网门户 / MQTT / TLS 留配额。
+    config.max_open_sockets = 3;
+    if (httpd_start(&server_, &config) != ESP_OK) {
+        server_ = nullptr;
+        return false;
+    }
     const httpd_uri_t routes[] = {
         {.uri="/todo", .method=HTTP_GET, .handler=TodoPage, .user_ctx=this},
         {.uri="/schedule", .method=HTTP_GET, .handler=SchedulePage, .user_ctx=this},

@@ -1,10 +1,44 @@
 // 内容管理（对齐 dual 后台「内容管理」）
-// 课程表 / 便签 / 今日作业 / 阅读任务 / 相册 / 缴费台账 / 快递取件码 / 家庭日程 / 采购清单 / 纪念日
+// tabs 按场景联动：学习/家庭场景显示课程表、作业等；理财场景显示自选股、推荐股、资金管理。
 // 读写同一份 dual_config，与 Web 后台互不覆盖。
 const api = require('../../utils/api.js');
 const dual = require('../../utils/dual.js');
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+// 场景 → 内容 tabs（理财场景与行情/持仓配置吻合，学习场景保持原样）
+const SCENE_TABS = {
+  finance: [
+    { key: 'watchlist', label: '自选股' },
+    { key: 'reco', label: '推荐股' },
+    { key: 'portfolio', label: '资金管理' },
+    { key: 'gold', label: '黄金/期货' },
+    { key: 'notes', label: '便签' }
+  ],
+  study: [
+    { key: 'course', label: '课程表' },
+    { key: 'notes', label: '便签' },
+    { key: 'homework', label: '今日作业' },
+    { key: 'reading', label: '阅读任务' },
+    { key: 'album', label: '相册' }
+  ],
+  family: [
+    { key: 'notes', label: '便签' },
+    { key: 'bills', label: '缴费台账' },
+    { key: 'express', label: '快递/取件码' },
+    { key: 'schedule', label: '家庭日程' },
+    { key: 'shopping', label: '采购清单' },
+    { key: 'anniversaries', label: '纪念日' }
+  ],
+  office: [
+    { key: 'notes', label: '便签' },
+    { key: 'album', label: '相册' }
+  ],
+  custom: [
+    { key: 'notes', label: '便签' },
+    { key: 'album', label: '相册' }
+  ]
+};
 
 const BILL_CATEGORIES = ['电费', '水费', '燃气费', '伙食费', '宽带费', '大模型费用', '其他'];
 const EXPRESS_COMPANIES = ['顺丰', '京东', '中通', '圆通', '韵达', '申通', '邮政EMS', '极兔', '德邦', '其他'];
@@ -32,19 +66,10 @@ function advanceDate(key, cycle) {
 
 Page({
   data: {
-    tab: 'course',
-    tabs: [
-      { key: 'course', label: '课程表' },
-      { key: 'notes', label: '便签' },
-      { key: 'homework', label: '今日作业' },
-      { key: 'reading', label: '阅读任务' },
-      { key: 'album', label: '相册' },
-      { key: 'bills', label: '缴费台账' },
-      { key: 'express', label: '快递/取件码' },
-      { key: 'schedule', label: '家庭日程' },
-      { key: 'shopping', label: '采购清单' },
-      { key: 'anniversaries', label: '纪念日' }
-    ],
+    tab: 'notes',
+    tabs: SCENE_TABS.family,
+    sceneKey: 'family',
+    sceneName: '家庭',
     deviceName: '',
     mac: '',
     loading: true,
@@ -110,7 +135,21 @@ Page({
 
     // 采购清单
     familyShopping: [],
-    shopText: ''
+    shopText: '',
+
+    // 理财场景：自选股 / 推荐股 / 资金管理
+    finWatchlist: [],
+    finQuoteView: [],
+    finCodesInput: '',
+    finBusy: false,
+    finReco: [],
+    finRecoDisclaimer: '',
+    finGold: [],
+    finPortfolio: null,
+    pfCash: '',
+    pfCode: '',
+    pfShares: '',
+    pfCost: ''
   },
 
   onLoad() {
@@ -125,6 +164,12 @@ Page({
     this.load();
   },
 
+  // 从场景中心返回时重新读取 sceneKey，让内容配置跟随场景
+  onShow() {
+    if (!this._firstShowDone) { this._firstShowDone = true; return; }
+    if (this.data.mac) this.load();
+  },
+
   load() {
     this.setData({ loading: true });
     api.getDualConfig(this.data.mac)
@@ -133,8 +178,16 @@ Page({
         const content = dual.normalizeContent(cfg.content);
         const ct = content.courseTable;
         const members = (content.familyMembers || []).map((m) => m.name).filter(Boolean);
+        const sceneKey = cfg.sceneKey || 'family';
+        const scene = dual.SCENES.filter((s) => s.key === sceneKey)[0] || dual.SCENES[0];
+        const tabs = SCENE_TABS[sceneKey] || SCENE_TABS.family;
+        const tab = tabs.some((t) => t.key === this.data.tab) ? this.data.tab : tabs[0].key;
         this.setData({
           cfg: cfg,
+          sceneKey: sceneKey,
+          sceneName: scene.name,
+          tabs: tabs,
+          tab: tab,
           ct: ct,
           notes: content.notes,
           homework: content.homework,
@@ -152,6 +205,7 @@ Page({
         this.refreshDays(ct.show_days);
         this.syncBills();
         this.syncExpress();
+        this.loadFinanceTab(tab);
       })
       .catch((e) => {
         this.setData({ loading: false });
@@ -168,7 +222,222 @@ Page({
   },
 
   onTab(e) {
-    this.setData({ tab: e.currentTarget.dataset.key });
+    const key = e.currentTarget.dataset.key;
+    this.setData({ tab: key });
+    this.loadFinanceTab(key);
+  },
+
+  // —— 理财场景：按需加载自选 / 推荐 / 持仓 ——
+  loadFinanceTab(key) {
+    if (key === 'watchlist') this.refreshWatchlist();
+    else if (key === 'reco' && !this.data.finReco.length) this.refreshReco();
+    else if (key === 'gold' && !this.data.finGold.length) this.refreshGold();
+    else if (key === 'portfolio' && !this.data.finPortfolio) this.refreshPortfolio();
+  },
+
+  refreshGold() {
+    this.setData({ finBusy: true });
+    api.getFinanceGold()
+      .then((r) => this.setData({ finGold: r.items || [], finBusy: false }))
+      .catch((e) => {
+        this.setData({ finBusy: false });
+        wx.showToast({ title: e.message || '行情加载失败', icon: 'none' });
+      });
+  },
+
+  refreshWatchlist() {
+    if (this.data.finBusy) return;
+    this.setData({ finBusy: true });
+    api.getFinanceWatchlist()
+      .then((r) => {
+        const list = r.watchlist || [];
+        this.setData({ finWatchlist: list, finBusy: false });
+        return list.length ? api.getFinanceQuotes(list.map((x) => x.code)) : Promise.resolve({ quotes: [] });
+      })
+      .then((r) => {
+        const quotes = (r && r.quotes) || [];
+        const by = {};
+        quotes.forEach((q) => { by[q.code] = q; });
+        const view = this.data.finWatchlist.map((x) => {
+          const q = by[x.code] || {};
+          const pct = q.pct;
+          return Object.assign({}, x, {
+            price: q.price, pct: pct,
+            dir: pct == null ? '' : (pct > 0 ? 'up' : (pct < 0 ? 'down' : ''))
+          });
+        });
+        this.setData({ finQuoteView: view, finBusy: false });
+      })
+      .catch((e) => {
+        this.setData({ finBusy: false });
+        wx.showToast({ title: e.message || '行情加载失败', icon: 'none' });
+      });
+  },
+
+  onFinCodes(e) { this.setData({ finCodesInput: e.detail.value }); },
+  addWatch() {
+    const codes = (this.data.finCodesInput || '').trim();
+    if (!codes) { wx.showToast({ title: '请输入证券代码', icon: 'none' }); return; }
+    if (this.data.finBusy) return;
+    this.setData({ finBusy: true });
+    api.saveFinanceWatchlist(codes)
+      .then(() => {
+        this.setData({ finCodesInput: '', finBusy: false });
+        wx.showToast({ title: '已加入自选', icon: 'success' });
+        this.refreshWatchlist();
+      })
+      .catch((e) => {
+        this.setData({ finBusy: false });
+        wx.showToast({ title: e.message || '添加失败', icon: 'none' });
+      });
+  },
+  removeWatch(e) {
+    const code = e.currentTarget.dataset.code;
+    api.deleteFinanceWatchlist(code)
+      .then(() => this.refreshWatchlist())
+      .catch((e2) => wx.showToast({ title: e2.message || '删除失败', icon: 'none' }));
+  },
+  applyWatch() {
+    if (!this.data.finWatchlist.length) { wx.showToast({ title: '请先添加自选股', icon: 'none' }); return; }
+    wx.showLoading({ title: '下发中' });
+    api.applyFinanceToDevice(this.data.mac)
+      .then((r) => {
+        wx.hideLoading();
+        wx.showToast({ title: r.message || '已写入设备', icon: 'success' });
+      })
+      .catch((e) => {
+        wx.hideLoading();
+        wx.showToast({ title: e.message || '下发失败', icon: 'none' });
+      });
+  },
+
+  refreshReco() {
+    this.setData({ finBusy: true });
+    api.getFinanceRecommend()
+      .then((r) => this.setData({ finReco: r.items || [], finRecoDisclaimer: r.disclaimer || '', finBusy: false }))
+      .catch((e) => {
+        this.setData({ finBusy: false });
+        wx.showToast({ title: e.message || '推荐加载失败', icon: 'none' });
+      });
+  },
+  recoToWatch(e) {
+    const code = e.currentTarget.dataset.code;
+    const codes = this.data.finWatchlist.map((x) => x.code).concat([code]).join(',');
+    if (this.data.finBusy) return;
+    this.setData({ finBusy: true });
+    api.saveFinanceWatchlist(codes)
+      .then(() => {
+        this.setData({ finBusy: false });
+        wx.showToast({ title: '已加入自选', icon: 'success' });
+      })
+      .catch((err) => {
+        this.setData({ finBusy: false });
+        wx.showToast({ title: err.message || '添加失败', icon: 'none' });
+      });
+  },
+
+  refreshPortfolio() {
+    this.setData({ finBusy: true });
+    api.getFinancePortfolio()
+      .then((r) => {
+        this.setData({
+          finPortfolio: r,
+          finBusy: false,
+          pfCash: r.cash ? String(r.cash) : ''
+        });
+      })
+      .catch((e) => {
+        this.setData({ finBusy: false });
+        wx.showToast({ title: e.message || '持仓加载失败', icon: 'none' });
+      });
+  },
+  onPfCash(e) { this.setData({ pfCash: e.detail.value }); },
+  onPfCode(e) { this.setData({ pfCode: e.detail.value }); },
+  onPfShares(e) { this.setData({ pfShares: e.detail.value }); },
+  onPfCost(e) { this.setData({ pfCost: e.detail.value }); },
+  savePortfolio() {
+    if (this.data.finBusy) return;
+    const p = this.data.finPortfolio;
+    const positions = ((p && p.positions) || []).map((x) => ({ code: x.code, name: x.name, shares: x.shares, cost: x.cost }));
+    const cash = parseFloat(this.data.pfCash) || 0;
+    this.setData({ finBusy: true });
+    api.saveFinancePortfolio(cash, positions)
+      .then(() => {
+        this.setData({ finBusy: false });
+        wx.showToast({ title: '已保存', icon: 'success' });
+        this.refreshPortfolio();
+      })
+      .catch((e) => {
+        this.setData({ finBusy: false });
+        wx.showToast({ title: e.message || '保存失败', icon: 'none' });
+      });
+  },
+  addPosition() {
+    const raw = (this.data.pfCode || '').trim();
+    const shares = parseFloat(this.data.pfShares);
+    const cost = parseFloat(this.data.pfCost);
+    if (!raw) { wx.showToast({ title: '请输入股票名称或代码', icon: 'none' }); return; }
+    if (!(shares > 0) || !(cost > 0)) { wx.showToast({ title: '请填写股数与成本价', icon: 'none' }); return; }
+    if (this.data.finBusy) return;
+    const doAdd = (code, name) => {
+      const existing = ((this.data.finPortfolio && this.data.finPortfolio.positions) || [])
+        .map((x) => ({ code: x.code, name: x.name, shares: x.shares, cost: x.cost }));
+      if (existing.some((x) => x.code === code)) { this.setData({ finBusy: false }); wx.showToast({ title: '该股票已在持仓中', icon: 'none' }); return; }
+      existing.push({ code: code, name: name || '', shares: shares, cost: cost });
+      this.setData({ finBusy: true });
+      api.saveFinancePortfolio(parseFloat(this.data.pfCash) || 0, existing)
+        .then(() => {
+          this.setData({ pfCode: '', pfShares: '', pfCost: '', finBusy: false });
+          wx.showToast({ title: '已录入 ' + (name || code), icon: 'success' });
+          this.refreshPortfolio();
+        })
+        .catch((e) => {
+          this.setData({ finBusy: false });
+          wx.showToast({ title: e.message || '保存失败', icon: 'none' });
+        });
+    };
+    if (/^\d{6}$/.test(raw)) { doAdd(raw, ''); return; }
+    // 名称/拼音 → 自动反查代码
+    api.financeSearch(raw)
+      .then((r) => {
+        const items = (r && r.items) || [];
+        if (!items.length) { wx.showToast({ title: '未找到「' + raw + '」，请输入 6 位代码', icon: 'none' }); return; }
+        doAdd(items[0].code, items[0].name || '');
+      })
+      .catch(() => wx.showToast({ title: '查询失败，请输入 6 位代码', icon: 'none' }));
+  },
+  removePosition(e) {
+    const code = e.currentTarget.dataset.code;
+    const p = this.data.finPortfolio;
+    const rest = ((p && p.positions) || []).filter((x) => x.code !== code)
+      .map((x) => ({ code: x.code, name: x.name, shares: x.shares, cost: x.cost }));
+    if (this.data.finBusy) return;
+    this.setData({ finBusy: true });
+    api.saveFinancePortfolio(parseFloat(this.data.pfCash) || 0, rest)
+      .then(() => {
+        this.setData({ finBusy: false });
+        this.refreshPortfolio();
+      })
+      .catch((err) => {
+        this.setData({ finBusy: false });
+        wx.showToast({ title: err.message || '删除失败', icon: 'none' });
+      });
+  },
+  applyPortfolio() {
+    if (!this.data.finPortfolio || !this.data.finPortfolio.summary || !this.data.finPortfolio.summary.count) {
+      wx.showToast({ title: '请先录入持仓', icon: 'none' });
+      return;
+    }
+    wx.showLoading({ title: '下发中' });
+    api.applyFinancePortfolioToDevice(this.data.mac)
+      .then((r) => {
+        wx.hideLoading();
+        wx.showToast({ title: r.message || '已写入设备', icon: 'success' });
+      })
+      .catch((e) => {
+        wx.hideLoading();
+        wx.showToast({ title: e.message || '下发失败', icon: 'none' });
+      });
   },
 
   // —— 课程表 ——

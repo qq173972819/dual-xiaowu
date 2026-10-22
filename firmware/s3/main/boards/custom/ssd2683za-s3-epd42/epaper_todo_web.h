@@ -12,6 +12,8 @@ public:
     explicit EpaperTodoWeb(std::function<void(const char* kind)> changed);
     ~EpaperTodoWeb();
     bool Start();
+    // 进入配网前调用：释放 httpd，避免与配网门户并存时争抢控制套接字。
+    void Stop();
     bool IsRunning() const { return server_ != nullptr; }
 
 private:

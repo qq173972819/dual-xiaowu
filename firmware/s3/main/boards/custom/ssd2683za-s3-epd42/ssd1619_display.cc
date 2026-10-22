@@ -788,7 +788,30 @@ bool Ssd1619Display::RefreshOnce(const uint8_t* data, bool partial) {
 }
 
 void Ssd1619Display::RawFrameRefresh(const uint8_t* frame, bool partial) {
-    Refresh(frame, partial);
+    // 占位此前被释放过（语音会话把仪表盘/对话文本刷上了屏）时，外部画面
+    // 必须走全刷：partial 只驱动变化区域，会话文本的像素会残留在屏上。
+    bool need_full = false;
+    xSemaphoreTake(mutex_, portMAX_DELAY);
+    need_full = !hold_external_frame_ && partial;
+    xSemaphoreGive(mutex_);
+    Refresh(frame, partial && !need_full);
+    xSemaphoreTake(mutex_, portMAX_DELAY);
+    if (!hold_external_frame_) {
+        ESP_LOGI(kTag, "外部画面已上屏：暂停仪表盘重绘（按键/语音可调回）");
+    }
+    hold_external_frame_ = true;
+    xSemaphoreGive(mutex_);
+}
+
+void Ssd1619Display::ReleaseExternalFrameHold() {
+    bool release = false;
+    xSemaphoreTake(mutex_, portMAX_DELAY);
+    release = hold_external_frame_;
+    hold_external_frame_ = false;
+    xSemaphoreGive(mutex_);
+    if (!release) return;
+    ESP_LOGI(kTag, "外部画面占位已释放，交还仪表盘");
+    RequestRefresh(true, /*force=*/true);
 }
 
 void Ssd1619Display::FlushCallback(lv_display_t* display, const lv_area_t* area,
@@ -849,6 +872,21 @@ void Ssd1619Display::RefreshTask() {
         bool should_refresh = false;
         bool use_partial = false;
         xSemaphoreTake(mutex_, portMAX_DELAY);
+        // 外部画面占屏期间，仪表盘的周期重绘一律丢弃——否则刚刷出来的
+        // InkSight/双屏 A 画面会被下一帧仪表盘立刻盖掉，表现为"刷了没反应"。
+        // 语音会话例外：交互界面必须能实时上屏，此时顺带释放占位。
+        if (hold_external_frame_ && !refresh_force_pending_) {
+            if (dashboard_.IsConversation()) {
+                ESP_LOGI(kTag, "会话界面需要屏幕，释放外部画面占位");
+                hold_external_frame_ = false;
+            } else {
+                refresh_pending_ = false;
+                refresh_partial_pending_ = false;
+                should_refresh = false;
+                xSemaphoreGive(mutex_);
+                continue;
+            }
+        }
         if (refresh_pending_) {
             refresh_pending_ = false;
             const bool force_now = refresh_force_pending_;

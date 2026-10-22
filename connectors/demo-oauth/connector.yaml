@@ -1,0 +1,24 @@
+{
+  "id": "demo-oauth",
+  "name": "示例 OAuth 连接器",
+  "version": "0.1.0",
+  "type": "user",
+  "category": "demo",
+  "description": "开发/演示用的用户级 OAuth 连接器。授权服务器为本平台 dev 模式内置 mock，可离线跑通 授权→回调→加密入库 全流程。接入真实第三方时，把 auth 指向对方授权端点即可。",
+  "auth": {
+    "kind": "oauth2",
+    "authorize_url": "/api/v1/connectors/demo-oauth/mock-authorize",
+    "token_url": "/api/v1/connectors/demo-oauth/mock-token",
+    "client_id": "xiaowu-demo",
+    "client_secret_env": "XIAOWU_DEMO_OAUTH_SECRET",
+    "scopes": ["demo.read"]
+  },
+  "guide": [
+    "点击「去授权」，在打开的授权页确认授权",
+    "授权完成后返回小程序，状态变为「已绑定」",
+    "如需解除，点击「解除绑定」，平台立即删除已存凭据"
+  ],
+  "permissions": ["connector.demo.read"],
+  "risk": "low",
+  "disclaimer": "仅用于开发与演示，不产生任何真实外部数据。"
+}

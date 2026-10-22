@@ -6,6 +6,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from fastapi.responses import HTMLResponse
 
 from .models import ContentConfigIn, ContentPush, DeveloperAppCreate, DeviceCapabilities, DeviceEvent, DeviceRegister, Heartbeat, MobileContentPush, PasswordLogin, TaskAck, TemplateUpsert, WebhookCreate
+from .connector_api import router as connector_router
+from .connectors import ConnectorRegistry, CredentialVault
 from .plugin_runtime import PluginRegistry
 from .settings import settings
 from .store import Store
@@ -14,6 +16,8 @@ from .render_api import router as render_router
 
 store = Store(settings.database_path)
 plugin_registry = PluginRegistry(Path(__file__).resolve().parents[1] / "plugins")
+connector_registry = ConnectorRegistry(Path(__file__).resolve().parents[1] / "connectors")
+credential_vault = CredentialVault(settings.connector_master_key)
 
 
 @asynccontextmanager
@@ -26,6 +30,7 @@ app = FastAPI(title="XiaoWu S3 Open Platform", version="0.1.0", lifespan=lifespa
 
 app.include_router(console_router)
 app.include_router(render_router)
+app.include_router(connector_router)
 
 
 def current_app(authorization: Annotated[str | None, Header()] = None,
@@ -60,6 +65,18 @@ def require_admin(x_admin_key: Annotated[str | None, Header()] = None) -> str:
     if x_admin_key != settings.admin_key:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid admin key")
     return "admin"
+
+
+def require_device_header(device_id: str,
+                          x_device_token: Annotated[str | None, Header()] = None) -> str:
+    """固件侧鉴权：X-Device-Token（由 POST /api/device/{mac}/token 领取）。
+
+    与 render / dual-config 同一套令牌体系，区别于注册时下发的注册令牌。
+    """
+    mac = (device_id or "").strip().upper()
+    if not (x_device_token and store.verify_device_token(mac, x_device_token)):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid device token")
+    return mac
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -221,6 +238,35 @@ def mobile_history(device_id: str, user_id: str = Depends(current_user)) -> list
     if not store.user_owns(user_id, device_id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "device is not bound to this user")
     return store.task_history(device_id, 30)
+
+
+# 设备留言：固件轮询待播留言 → 语音端播放 → 回执标记已听（Unread 徽标随之消失）
+@app.get("/api/v1/devices/{device_id}/messages")
+def device_messages(device_id: str, limit: int = 20, unread: bool = True,
+                    mac: str = Depends(require_device_header)) -> dict:
+    items = store.list_messages(mac, max(1, min(limit, 100)), unread_only=unread)
+    return {
+        "unread": store.count_unread_messages(mac),
+        "items": [
+            {
+                "id": it["id"], "kind": it["kind"], "text": it.get("text") or "",
+                "sender": it.get("sender_name") or "", "sender_type": it.get("sender_type") or "",
+                "duration": it.get("duration") or 0,
+                "created_at": it.get("created_at") or "",
+                "played": bool(it.get("played_at")),
+                # 语音端直接拉取该地址播放（需带同一枚 X-Device-Token）
+                "audio_url": it.get("audio_url") or "",
+            }
+            for it in items
+        ],
+    }
+
+
+@app.post("/api/v1/devices/{device_id}/messages/{message_id}/played", status_code=204)
+def device_message_played(device_id: str, message_id: str,
+                          mac: str = Depends(require_device_header)) -> Response:
+    store.mark_message_played(mac, message_id)
+    return Response(status_code=204)
 
 
 # 双屏内容配置：小程序与 PC 后台读写同一份 dual_config，互不覆盖。

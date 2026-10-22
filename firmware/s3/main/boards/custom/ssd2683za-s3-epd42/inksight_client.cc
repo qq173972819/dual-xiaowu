@@ -1,6 +1,7 @@
 #include "inksight_client.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -93,6 +94,16 @@ void ReadRefreshHeader(Http* http, int* output) {
     if (value.empty()) return;
     const int minutes = std::atoi(value.c_str());
     if (minutes >= 1 && minutes <= 1440) *output = minutes;
+}
+
+// X-Pending-Refresh：后台「应用到设备」后，下一次取图即触发立即刷新。
+static std::atomic<bool> s_pending_refresh{false};
+
+void ReadPendingRefreshHeader(Http* http) {
+    if (!http) return;
+    if (http->GetResponseHeader("X-Pending-Refresh") == "1") {
+        s_pending_refresh.store(true);
+    }
 }
 
 // BMP 文件头 + 最小 InfoHeader 合计 54 字节；InfoHeader 中关心的字段偏移。
@@ -189,6 +200,10 @@ inline size_t RowBytes(const BmpHeaderLayout& h, unsigned bpp, int w) {
 }
 }  // namespace
 
+bool InkSightClient::TakePendingRefresh() {
+    return s_pending_refresh.exchange(false);
+}
+
 bool InkSightClient::UnbindSelf(NetworkInterface* network,
                                 const std::string& server,
                                 const std::string& device_id,
@@ -260,9 +275,13 @@ bool InkSightClient::Load(NetworkInterface* network,
                           uint8_t* dst,
                           std::string& error,
                           int* server_refresh_minutes,
-                          int battery_percent) {
+                          int battery_percent,
+                          bool* device_unbound_out,
+                          std::string* pair_code_out) {
     // 先填白，出错时 caller 也能直接刷掉上一帧
     std::memset(dst, 0xFF, kFrameBytes);
+    if (device_unbound_out) *device_unbound_out = false;
+    if (pair_code_out) pair_code_out->clear();
     if (!network) {
         error = "no network interface";
         return false;
@@ -386,6 +405,15 @@ bool InkSightClient::Load(NetworkInterface* network,
             return false;
         }
         ReadRefreshHeader(http.get(), server_refresh_minutes);
+        const bool unbound =
+            http->GetResponseHeader("X-Device-Unbound") == "1";
+        const std::string pair_code = http->GetResponseHeader("X-Pair-Code");
+        if (device_unbound_out) *device_unbound_out = unbound;
+        if (pair_code_out) *pair_code_out = pair_code;
+        if (unbound) {
+            ESP_LOGI(kTag, "设备未绑定：配对码 %s 已下发到 FPC1 黑白屏",
+                     pair_code.empty() ? "(后端未返回)" : pair_code.c_str());
+        }
 
     // 1. 先吞 BMP 头（文件头+InfoHeader+可能的调色板）。我们需要拿到
     //    pixel_offset 才能准确定位像素起点，但流式读的前面一部分是连续的，
@@ -768,6 +796,7 @@ bool InkSightClient::Load2bpp(NetworkInterface* network,
             break;
         }
         ReadRefreshHeader(http.get(), server_refresh_minutes);
+        ReadPendingRefreshHeader(http.get());
         const bool device_unbound =
             http->GetResponseHeader("X-Device-Unbound") == "1";
 
@@ -892,6 +921,71 @@ bool InkSightClient::LoadDualConfig(NetworkInterface* network,
     }
     if (error) *error = "dual-config authorization failed";
     return false;
+}
+
+bool InkSightClient::SetFinanceKline(NetworkInterface* network,
+                                     const std::string& server,
+                                     const std::string& device_id,
+                                     const std::string& query,
+                                     std::string* name_out,
+                                     std::string* error) {
+    if (error) error->clear();
+    if (!network || server.empty() || device_id.empty()) {
+        if (error) *error = "no network or server";
+        return false;
+    }
+    if (query.empty()) {
+        if (error) *error = "empty query";
+        return false;
+    }
+    const std::string token = DeviceToken(network, server, device_id);
+    if (token.empty()) {
+        if (error) *error = "no device token";
+        return false;
+    }
+    auto http = network->CreateHttp(-1);
+    if (!http) {
+        if (error) *error = "http create failed";
+        return false;
+    }
+    http->SetTimeout(15000);
+    http->SetKeepAlive(false);
+    http->SetHeader("Content-Type", "application/json");
+    http->SetHeader("X-Device-Token", token);
+    std::string body = "{\"query\":\"";
+    body += query;
+    body += "\"}";
+    http->SetContent(std::move(body));
+    const std::string url = NormalizeServer(server) + "/api/device/" +
+                            device_id + "/finance/kline";
+    if (!http->Open("POST", url)) {
+        if (error) *error = "connect failed";
+        return false;
+    }
+    const int status = http->GetStatusCode();
+    if (status < 200 || status >= 300) {
+        char message[48];
+        std::snprintf(message, sizeof(message), "kline HTTP %d", status);
+        if (error) *error = message;
+        return false;
+    }
+    if (name_out) {
+        // 后端返回 {"name":"乐鑫科技",...}；解析失败时回退用原始输入
+        const std::string payload = http->ReadAll();
+        const std::string key = "\"name\":";
+        auto pos = payload.find(key);
+        if (pos != std::string::npos) {
+            auto start = payload.find('"', pos + key.size());
+            if (start != std::string::npos) {
+                auto end = payload.find('"', start + 1);
+                if (end != std::string::npos) {
+                    *name_out = payload.substr(start + 1, end - start - 1);
+                }
+            }
+        }
+        if (name_out->empty()) *name_out = query;
+    }
+    return true;
 }
 
 bool InkSightClient::ReportRuntimeMode(NetworkInterface* network,

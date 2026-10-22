@@ -1,8 +1,9 @@
-<!-- 内容管理：课程表 / 便签 / 今日作业 / 阅读任务 / 相册 / 缴费台账 / 快递取件码 / 家庭日程 / 采购清单 / 纪念日 -->
+<!-- 内容管理：tabs 随场景中心联动（理财 → 自选股/推荐股/资金管理；学习/家庭 → 原模块） -->
 <view class="container">
   <view class="page-title">内容管理</view>
-  <view class="page-sub" wx:if="{{deviceName}}">当前设备：{{deviceName}}</view>
+  <view class="page-sub" wx:if="{{deviceName}}">当前设备：{{deviceName}} · 场景：{{sceneName}}</view>
   <view class="page-sub" wx:else>未选择设备</view>
+  <view class="page-sub">内容配置与「{{sceneName}}」场景联动，切场景后回到本页自动刷新模块。</view>
 
   <view class="segment scroll">
     <view wx:for="{{tabs}}" wx:key="key"
@@ -307,6 +308,112 @@
         <button class="btn btn-sm btn-secondary" data-id="{{item.id}}" data-kind="anniversaries" bindtap="removeFamilyEvent">删除</button>
       </view>
     </view>
+  </block>
+
+  <!-- ============ 理财 · 自选股 ============ -->
+  <block wx:if="{{!loading && tab === 'watchlist'}}">
+    <view class="card">
+      <view class="card-title">自选股</view>
+      <view class="field-label">添加证券代码（6 位，逗号分隔，最多 8 只）</view>
+      <view class="row-flex">
+        <input class="input" placeholder="如 600519,000001" value="{{finCodesInput}}" bindinput="onFinCodes" />
+        <button class="btn btn-secondary btn-sm" bindtap="addWatch">添加</button>
+      </view>
+      <button class="btn btn-primary btn-block" bindtap="applyWatch">应用到设备 A 屏</button>
+    </view>
+    <view wx:if="{{finQuoteView.length === 0}}" class="hint">还没有自选股，添加后带实时行情（涨红跌绿）。</view>
+    <view wx:for="{{finQuoteView}}" wx:key="code" class="list-item">
+      <view class="list-head">
+        <text class="card-title">{{item.name}} <text class="muted">{{item.code}}</text></text>
+        <text class="fin-num {{item.dir}}">{{item.pct == null ? '--' : (item.pct > 0 ? '+' : '') + item.pct + '%'}}</text>
+      </view>
+      <view class="list-content">现价 {{item.price == null ? '--' : '¥' + item.price}}</view>
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-code="{{item.code}}" bindtap="removeWatch">删除</button>
+      </view>
+    </view>
+    <view class="hint">颜色遵循 A 股惯例：红涨绿跌。应用后设备 A 屏显示实时行情列表。</view>
+  </block>
+
+  <!-- ============ 理财 · 推荐股 ============ -->
+  <block wx:if="{{!loading && tab === 'reco'}}">
+    <view class="card">
+      <view class="card-title">智能推荐股</view>
+      <view class="page-sub">基于公开行情的当日动量规则化排序，仅供研究参考。</view>
+      <button class="btn btn-secondary btn-block" bindtap="refreshReco">刷新推荐</button>
+    </view>
+    <view wx:for="{{finReco}}" wx:key="code" class="list-item">
+      <view class="list-head">
+        <text class="card-title">{{item.name}} <text class="muted">{{item.code}}</text></text>
+        <text class="fin-num {{item.pct > 0 ? 'up' : (item.pct < 0 ? 'down' : '')}}">{{item.pct > 0 ? '+' : ''}}{{item.pct}}%</text>
+      </view>
+      <view class="list-content">{{item.reason}} · 现价 {{item.price == null ? '--' : '¥' + item.price}}</view>
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-code="{{item.code}}" bindtap="recoToWatch">加入自选</button>
+      </view>
+    </view>
+    <view wx:if="{{finRecoDisclaimer}}" class="hint">{{finRecoDisclaimer}}</view>
+  </block>
+
+  <!-- ============ 理财 · 黄金/期货 ============ -->
+  <block wx:if="{{!loading && tab === 'gold'}}">
+    <view class="card">
+      <view class="card-title">黄金 / 期货</view>
+      <view class="page-sub">贵金属与商品期货主连合约实时快照，红涨绿跌。</view>
+      <button class="btn btn-secondary btn-block" bindtap="refreshGold">刷新行情</button>
+    </view>
+    <view wx:for="{{finGold}}" wx:key="code" class="list-item">
+      <view class="list-head">
+        <text class="card-title">{{item.name}} <text class="muted">{{item.code}}</text></text>
+        <text class="fin-num {{item.pct > 0 ? 'up' : (item.pct < 0 ? 'down' : '')}}">{{item.pct == null ? '--' : ((item.pct > 0 ? '+' : '') + item.pct + '%')}}</text>
+      </view>
+      <view class="list-content">最新价 {{item.price == null ? '--' : item.price}}</view>
+    </view>
+    <view class="hint">期货主连为连续主力数据，仅供行情参考，不构成投资建议；夜盘时段价格可能停滞。</view>
+  </block>
+
+  <!-- ============ 理财 · 资金管理 ============ -->
+  <block wx:if="{{!loading && tab === 'portfolio' && finPortfolio}}">
+    <view class="card" wx:if="{{finPortfolio.summary}}">
+      <view class="card-title">资金总览</view>
+      <view class="list-content">总市值 ¥{{finPortfolio.summary.market_value}} · 持仓成本 ¥{{finPortfolio.summary.cost_value}} · 现金 ¥{{finPortfolio.summary.cash}}</view>
+      <view class="list-head">
+        <text class="list-content">总盈亏（正=上涨，负=下跌）</text>
+        <text class="fin-num {{finPortfolio.summary.pnl > 0 ? 'up' : (finPortfolio.summary.pnl < 0 ? 'down' : '')}}">{{finPortfolio.summary.pnl > 0 ? '+' : ''}}{{finPortfolio.summary.pnl}}（{{finPortfolio.summary.pnl_pct == null ? '--' : (finPortfolio.summary.pnl_pct > 0 ? '+' : '') + finPortfolio.summary.pnl_pct + '%'}}）</text>
+      </view>
+      <view wx:for="{{finPortfolio.notes}}" wx:key="*this" class="list-content">· {{item}}</view>
+    </view>
+
+    <view class="card">
+      <view class="card-title">录入持仓</view>
+      <view class="field-label">现金（元，可选）</view>
+      <input class="input" type="digit" placeholder="0.00" value="{{pfCash}}" bindinput="onPfCash" />
+      <view class="field-label">证券代码 / 股数 / 成本价</view>
+      <view class="row-flex">
+        <input class="input sm" placeholder="名称或代码" value="{{pfCode}}" bindinput="onPfCode" />
+        <input class="input sm" placeholder="股数" type="digit" value="{{pfShares}}" bindinput="onPfShares" />
+        <input class="input sm" placeholder="成本价" type="digit" value="{{pfCost}}" bindinput="onPfCost" />
+      </view>
+      <view class="row-flex">
+        <button class="btn btn-secondary btn-sm" bindtap="addPosition">录入持仓</button>
+        <button class="btn btn-secondary btn-sm" bindtap="savePortfolio">保存现金</button>
+      </view>
+    </view>
+
+    <view wx:if="{{finPortfolio.positions.length === 0}}" class="hint">还没有持仓，先录入一只。</view>
+    <view wx:for="{{finPortfolio.positions}}" wx:key="code" class="list-item">
+      <view class="list-head">
+        <text class="card-title">{{item.name}} <text class="muted">{{item.code}}</text></text>
+        <text class="fin-num {{item.pnl > 0 ? 'up' : (item.pnl < 0 ? 'down' : '')}}">{{item.pnl > 0 ? '+' : ''}}{{item.pnl}}</text>
+      </view>
+      <view class="list-content">{{item.shares}} 股 · 成本 ¥{{item.cost}} · 现价 {{item.price == null ? '--' : '¥' + item.price}} · 仓位 {{item.weight == null ? '--' : item.weight + '%'}}</view>
+      <view class="list-content">参考：{{item.advice}}</view>
+      <view class="list-actions">
+        <button class="btn btn-sm btn-secondary" data-code="{{item.code}}" bindtap="removePosition">移除</button>
+      </view>
+    </view>
+    <button class="btn btn-primary btn-block" bindtap="applyPortfolio">应用到设备 B 屏</button>
+    <view wx:if="{{finPortfolio.disclaimer}}" class="hint">{{finPortfolio.disclaimer}}；盈亏正负代表上涨/下跌，红涨绿跌。</view>
   </block>
 
   <view class="divider"></view>

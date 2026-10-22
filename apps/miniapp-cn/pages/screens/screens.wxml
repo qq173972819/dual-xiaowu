@@ -23,6 +23,13 @@
         </picker>
       </block>
 
+      <block wx:if="{{side === 'b' && showChartPicker}}">
+        <view class="field-label">图表类型（理财场景）</view>
+        <picker mode="selector" range="{{chartTypes}}" value="{{bChartIdx}}" bindchange="onChart">
+          <view class="picker">{{chartTypes[bChartIdx]}}</view>
+        </picker>
+      </block>
+
       <view class="field-label">数据来源</view>
       <picker mode="selector" range="{{sources}}" value="{{sideSourceIdx}}"
               bindchange="onSource">

@@ -122,6 +122,26 @@ class Store:
               created_at TEXT NOT NULL, delivered_at TEXT,
               FOREIGN KEY(webhook_id) REFERENCES webhooks(id)
             );
+            CREATE TABLE IF NOT EXISTS user_connectors (
+              user_id TEXT NOT NULL, connector_id TEXT NOT NULL,
+              credential_encrypted TEXT NOT NULL, external_account TEXT NOT NULL DEFAULT '',
+              scopes TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'active',
+              expires_at TEXT, updated_at TEXT NOT NULL,
+              PRIMARY KEY(user_id, connector_id),
+              FOREIGN KEY(user_id) REFERENCES users(user_id)
+            );
+            CREATE TABLE IF NOT EXISTS connector_auth_states (
+              state TEXT PRIMARY KEY, user_id TEXT NOT NULL, connector_id TEXT NOT NULL,
+              created_at TEXT NOT NULL, expires_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS messages (
+              id TEXT PRIMARY KEY, device_id TEXT NOT NULL, sender_name TEXT NOT NULL,
+              sender_type TEXT NOT NULL DEFAULT 'member', sender_id TEXT,
+              kind TEXT NOT NULL DEFAULT 'text', text TEXT, audio_id TEXT, audio_mime TEXT,
+              duration REAL, played_at TEXT, created_at TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'console',
+              FOREIGN KEY(device_id) REFERENCES devices(device_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_messages_device_created ON messages(device_id, created_at DESC);
             """)
             columns = {row[1] for row in db.execute("PRAGMA table_info(devices)")}
             if "pending_refresh" not in columns:
@@ -231,6 +251,12 @@ class Store:
     def user_owns(self, user_id: str, device_id: str) -> bool:
         with self.connect() as db:
             return db.execute("SELECT 1 FROM device_bindings WHERE user_id=? AND device_id=?", (user_id, device_id)).fetchone() is not None
+
+    def device_owner(self, device_id: str) -> str | None:
+        """返回设备当前绑定的账号（未绑定为 None）。"""
+        with self.connect() as db:
+            row = db.execute("SELECT user_id FROM device_bindings WHERE device_id=?", (device_id,)).fetchone()
+        return row["user_id"] if row else None
 
     def list_templates(self, enabled_only: bool = False) -> list[dict[str, Any]]:
         sql = "SELECT * FROM templates" + (" WHERE enabled=1" if enabled_only else "") + " ORDER BY category,name"
@@ -347,6 +373,21 @@ class Store:
         with self.connect() as db:
             row = db.execute("SELECT code FROM device_claims WHERE device_id=?", (device_id,)).fetchone()
         return row["code"] if row else None
+
+    def ensure_claim_code(self, device_id: str) -> str:
+        """保证设备一定有一个配对码：没有就现生成一个。
+
+        老设备（或早期注册路径）可能只有 devices 行没有 device_claims 行，
+        屏幕会显示「------」，用户永远绑不上。这里兜底补发。
+        """
+        with self.connect() as db:
+            row = db.execute("SELECT code FROM device_claims WHERE device_id=?", (device_id,)).fetchone()
+            if row:
+                return row["code"]
+            code = secrets.token_hex(3).upper()
+            db.execute("INSERT OR REPLACE INTO device_claims(code,device_id,created_at) VALUES(?,?,?)",
+                       (code, device_id, now_iso()))
+        return code
 
     def consume_pending_refresh(self, device_id: str) -> bool:
         """若设备有待刷新标记则清除并返回 True（设备已拉取）。"""
@@ -645,6 +686,130 @@ class Store:
         if not row:
             return None
         return self._teacher_row(dict(row))
+
+    # ——— 留言（文本 / 语音）———
+    @staticmethod
+    def _message_row(row: dict[str, Any]) -> dict[str, Any]:
+        item = dict(row)
+        # 已播放（=已读）状态：语音听过、文本读过都算
+        item["played"] = bool(item.get("played_at"))
+        item["duration"] = round(float(item["duration"] or 0), 1)
+        if item["audio_id"]:
+            item["audio_url"] = f"/api/messages/{item['id']}/audio"
+        else:
+            item["audio_url"] = ""
+        return item
+
+    def create_message(self, device_id: str, sender_name: str, kind: str, text: str = "",
+                       audio_id: str = "", audio_mime: str = "", duration: float = 0,
+                       sender_type: str = "member", sender_id: str | None = None,
+                       source: str = "console") -> dict[str, Any]:
+        msg_id = secrets.token_hex(10)
+        created = now_iso()
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO messages(id,device_id,sender_name,sender_type,sender_id,kind,text,"
+                "audio_id,audio_mime,duration,played_at,created_at,source) VALUES(?,?,?,?,?,?,?,?,?,?,NULL,?,?)",
+                (msg_id, device_id, (sender_name or "匿名").strip()[:24], sender_type, sender_id,
+                 "voice" if kind == "voice" else "text", (text or "").strip()[:500],
+                 audio_id, audio_mime, float(duration or 0), created, source),
+            )
+            row = db.execute("SELECT * FROM messages WHERE id=?", (msg_id,)).fetchone()
+        return self._message_row(dict(row))
+
+    def list_messages(self, device_id: str, limit: int = 50, unread_only: bool = False) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM messages WHERE device_id=?"
+        if unread_only:
+            sql += " AND played_at IS NULL"
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        with self.connect() as db:
+            rows = db.execute(sql, (device_id, limit)).fetchall()
+        return [self._message_row(dict(r)) for r in rows]
+
+    def get_message(self, message_id: str) -> dict[str, Any] | None:
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
+        return self._message_row(dict(row)) if row else None
+
+    def count_unread_messages(self, device_id: str) -> int:
+        with self.connect() as db:
+            row = db.execute("SELECT COUNT(*) AS c FROM messages WHERE device_id=? AND played_at IS NULL",
+                             (device_id,)).fetchone()
+        return int(row["c"] or 0)
+
+    def mark_message_played(self, device_id: str, message_id: str) -> bool:
+        with self.connect() as db:
+            cur = db.execute("UPDATE messages SET played_at=? WHERE id=? AND device_id=? AND played_at IS NULL",
+                             (now_iso(), message_id, device_id))
+        return cur.rowcount > 0
+
+    def mark_all_messages_played(self, device_id: str) -> int:
+        with self.connect() as db:
+            cur = db.execute("UPDATE messages SET played_at=? WHERE device_id=? AND played_at IS NULL",
+                             (now_iso(), device_id))
+        return cur.rowcount
+
+    def delete_message(self, device_id: str, message_id: str) -> bool:
+        with self.connect() as db:
+            cur = db.execute("DELETE FROM messages WHERE id=? AND device_id=?", (message_id, device_id))
+        return cur.rowcount > 0
+
+
+    # ——— 用户级连接器绑定（OAuth 凭据入保险库）———
+    def save_connector_binding(self, user_id: str, connector_id: str, credential_encrypted: str,
+                               external_account: str, scopes: list[str],
+                               expires_at: str | None = None) -> str:
+        ts = now_iso()
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO user_connectors(user_id,connector_id,credential_encrypted,external_account,"
+                "scopes,status,expires_at,updated_at) VALUES(?,?,?,?,?,'active',?,?) "
+                "ON CONFLICT(user_id,connector_id) DO UPDATE SET credential_encrypted=excluded.credential_encrypted,"
+                "external_account=excluded.external_account, scopes=excluded.scopes, status='active',"
+                "expires_at=excluded.expires_at, updated_at=excluded.updated_at",
+                (user_id, connector_id, credential_encrypted, external_account,
+                 json.dumps(scopes, ensure_ascii=False), expires_at, ts),
+            )
+        return ts
+
+    def get_connector_binding(self, user_id: str, connector_id: str) -> dict[str, Any] | None:
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM user_connectors WHERE user_id=? AND connector_id=?",
+                             (user_id, connector_id)).fetchone()
+        if not row:
+            return None
+        item = dict(row)
+        item["scopes"] = json.loads(item["scopes"])
+        return item
+
+    def list_connector_bindings(self, user_id: str) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            rows = db.execute("SELECT * FROM user_connectors WHERE user_id=? ORDER BY updated_at DESC",
+                              (user_id,)).fetchall()
+        return [{**dict(r), "scopes": json.loads(r["scopes"])} for r in rows]
+
+    def delete_connector_binding(self, user_id: str, connector_id: str) -> bool:
+        with self.connect() as db:
+            cur = db.execute("DELETE FROM user_connectors WHERE user_id=? AND connector_id=?",
+                             (user_id, connector_id))
+        return cur.rowcount > 0
+
+    def create_connector_state(self, user_id: str, connector_id: str, ttl_seconds: int = 600) -> str:
+        state = secrets.token_urlsafe(24)
+        expires = (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat()
+        with self.connect() as db:
+            db.execute("INSERT INTO connector_auth_states VALUES(?,?,?,?,?)",
+                       (state, user_id, connector_id, now_iso(), expires))
+        return state
+
+    def consume_connector_state(self, state: str) -> dict[str, Any] | None:
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM connector_auth_states WHERE state=?", (state,)).fetchone()
+            if row:
+                db.execute("DELETE FROM connector_auth_states WHERE state=?", (state,))
+        if not row or row["expires_at"] < now_iso():
+            return None
+        return {"user_id": row["user_id"], "connector_id": row["connector_id"]}
 
 
 DEFAULT_TEMPLATES = [

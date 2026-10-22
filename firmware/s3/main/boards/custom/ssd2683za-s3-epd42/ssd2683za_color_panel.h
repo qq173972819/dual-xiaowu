@@ -38,6 +38,9 @@ private:
     std::function<bool()> other_panel_busy_;
     bool available_ = false;
     bool panel_awake_ = false;
+    // BUSY 有效电平（运行时自适应）。有的模组是「忙=低、空闲=高」，有的相反；
+    // 复位前读到的是空闲电平，取反即为有效电平。默认沿用参考驱动的低有效。
+    int busy_active_level_ = kBusyActiveLevel;
 
     static std::atomic<bool> refreshing_;
     void WaitForOtherPanelIdle();

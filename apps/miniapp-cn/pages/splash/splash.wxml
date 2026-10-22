@@ -6,8 +6,8 @@
   <view class="splash-name">小悟AI墨水屏</view>
   <view class="splash-slogan">一体双屏 · 无蓝光学习看板</view>
 
-  <button class="btn splash-btn splash-btn-primary" bindtap="onParent">我是家长 ｜ 一键登录</button>
-  <button class="btn splash-btn splash-btn-outline" bindtap="onTeacher">我是老师 ｜ 快捷推送</button>
+  <button class="btn splash-btn splash-btn-primary" bindtap="onLogin">微信一键登录</button>
 
-  <view class="footer-note">家长管理设备与内容 · 老师免注册快捷推送</view>
+  <view class="footer-note">登录后即可管理设备与内容</view>
+  <view class="teacher-entry" bindtap="onTeacher">老师？凭家长提供的授权码进入</view>
 </view>

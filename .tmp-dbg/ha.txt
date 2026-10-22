@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+date: Thu, 22 Oct 2026 04:37:02 GMT
+server: uvicorn
+x-render-time-ms: 182
+x-mode-id: DUAL_A
+x-refresh-minutes: 5
+x-pending-refresh: 1
+content-length: 15662
+content-type: image/bmp
+

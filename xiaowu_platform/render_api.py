@@ -90,9 +90,10 @@ def render(
     owner = store.get_device_owner(mac)
     # 4) 未绑定 → 带配对码引导图
     if owner is None:
-        pair_code = store.get_claim_code(mac) or "------"
+        pair_code = store.ensure_claim_code(mac)
         guide = render_unbound(mac, w, h, pair_code)
-        headers = {"X-Device-Unbound": "1"}
+        # X-Pair-Code 供固件打日志 / 排障用（屏幕上是图，日志里要能读到码）
+        headers = {"X-Device-Unbound": "1", "X-Pair-Code": pair_code}
         if is_color:
             return Response(content=_pack_raw(guide, colors, bpp), media_type="application/octet-stream", headers=headers)
         return Response(content=image_to_bmp_bytes(guide), media_type="image/bmp", headers=headers)
@@ -100,6 +101,11 @@ def render(
     # 5) 已绑定 → 渲染双屏内容
     cfg_row = store.get_content_config(mac)
     dual_cfg = cfg_row["config"] if cfg_row else None
+    # 未读留言数：设备画面据此叠加「留言 N」徽标，播放后自动消失
+    try:
+        unread_messages = store.count_unread_messages(mac)
+    except Exception:  # noqa: BLE001
+        unread_messages = 0
 
     eff_colors = colors
     if is_color:
@@ -110,11 +116,13 @@ def render(
 
     try:
         if screen == "A":
-            img = render_dual_screen(mac, "A", w, h, 2, dual_cfg, battery=battery)
+            img = render_dual_screen(mac, "A", w, h, 2, dual_cfg, battery=battery,
+                                     unread_messages=unread_messages)
             out_bytes = image_to_bmp_bytes(img)
             out_media = "image/bmp"
         else:
-            img = render_dual_screen(mac, "B", w, h, eff_colors, dual_cfg, battery=None)
+            img = render_dual_screen(mac, "B", w, h, eff_colors, dual_cfg, battery=None,
+                                     unread_messages=unread_messages)
             out_bytes = _pack_raw(img, eff_colors, bpp)
             out_media = "application/octet-stream"
     except Exception as exc:  # noqa: BLE001
@@ -148,9 +156,14 @@ def preview(
     if mac:
         mac = mac.strip().upper()
         dual_cfg = None
+        unread_messages = 0
         cfg_row = store.get_content_config(mac)
         if cfg_row:
             dual_cfg = cfg_row["config"]
+        try:
+            unread_messages = store.count_unread_messages(mac)
+        except Exception:  # noqa: BLE001
+            unread_messages = 0
         # 未绑定也允许预览（展示空态/相册兜底），无需设备令牌
         eff_colors = colors
         if screen == "B":
@@ -158,9 +171,11 @@ def preview(
             cfg_colors = screen_cfg.get("colors")
             if isinstance(cfg_colors, int) and cfg_colors in (2, 3, 4):
                 eff_colors = min(cfg_colors, colors)
-            img = render_dual_screen(mac, "B", w, h, eff_colors, dual_cfg)
+            img = render_dual_screen(mac, "B", w, h, eff_colors, dual_cfg,
+                                     unread_messages=unread_messages)
         else:
-            img = render_dual_screen(mac, "A", w, h, 2, dual_cfg)
+            img = render_dual_screen(mac, "A", w, h, 2, dual_cfg,
+                                     unread_messages=unread_messages)
         return Response(content=image_to_png_bytes(img), media_type="image/png",
                         headers={"X-Mode-Id": str(persona or ""), "X-Cache-Hit": "0"})
     # 无 mac：渲染一张演示图（默认学习场景）

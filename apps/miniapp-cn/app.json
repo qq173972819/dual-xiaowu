@@ -14,7 +14,8 @@
     "pages/profile/profile",
     "pages/settings/settings",
     "pages/teacher-auth/teacher-auth",
-    "pages/members/members"
+    "pages/members/members",
+    "pages/connectors/connectors"
   ],
   "window": {
     "navigationBarBackgroundColor": "#f3f0e7",
