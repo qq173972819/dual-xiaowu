@@ -106,6 +106,39 @@ class Store:
               app_id TEXT PRIMARY KEY, name TEXT NOT NULL, token_hash TEXT UNIQUE NOT NULL,
               scopes TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS developer_accounts (
+              developer_id TEXT PRIMARY KEY, name TEXT NOT NULL, organization TEXT NOT NULL,
+              role TEXT NOT NULL DEFAULT 'developer',
+              email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL,
+              agreement_version TEXT NOT NULL, agreement_accepted_at TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS developer_sessions (
+              token_hash TEXT PRIMARY KEY, developer_id TEXT NOT NULL, expires_at TEXT NOT NULL,
+              FOREIGN KEY(developer_id) REFERENCES developer_accounts(developer_id)
+            );
+            CREATE TABLE IF NOT EXISTS admin_accounts (
+              admin_id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL,
+              password_hash TEXT NOT NULL, password_salt TEXT NOT NULL,
+              display_name TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS admin_sessions (
+              token_hash TEXT PRIMARY KEY, admin_id TEXT NOT NULL, expires_at TEXT NOT NULL,
+              FOREIGN KEY(admin_id) REFERENCES admin_accounts(admin_id)
+            );
+            CREATE TABLE IF NOT EXISTS sandbox_apps (
+              app_id TEXT PRIMARY KEY, developer_id TEXT NOT NULL, name TEXT NOT NULL,
+              scene TEXT NOT NULL, description TEXT NOT NULL, status TEXT NOT NULL,
+              sandbox_token_hash TEXT UNIQUE NOT NULL, version TEXT NOT NULL DEFAULT '0.1.0',
+              review_note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+              FOREIGN KEY(developer_id) REFERENCES developer_accounts(developer_id)
+            );
+            CREATE TABLE IF NOT EXISTS developer_model_configs (
+              app_id TEXT PRIMARY KEY, provider TEXT NOT NULL, model TEXT NOT NULL,
+              base_url TEXT NOT NULL, credential_encrypted TEXT NOT NULL,
+              system_prompt TEXT NOT NULL, updated_at TEXT NOT NULL,
+              FOREIGN KEY(app_id) REFERENCES sandbox_apps(app_id)
+            );
             CREATE TABLE IF NOT EXISTS webhooks (
               id TEXT PRIMARY KEY, app_id TEXT NOT NULL, url TEXT NOT NULL, events TEXT NOT NULL,
               signing_secret TEXT NOT NULL, enabled INTEGER NOT NULL, created_at TEXT NOT NULL,
@@ -151,6 +184,9 @@ class Store:
                 db.execute("ALTER TABLE tasks ADD COLUMN source TEXT NOT NULL DEFAULT 'openapi'")
             if "created_by" not in columns:
                 db.execute("ALTER TABLE tasks ADD COLUMN created_by TEXT")
+            developer_columns = {row[1] for row in db.execute("PRAGMA table_info(developer_accounts)")}
+            if "role" not in developer_columns:
+                db.execute("ALTER TABLE developer_accounts ADD COLUMN role TEXT NOT NULL DEFAULT 'developer'")
             for item in DEFAULT_TEMPLATES:
                 db.execute(
                     "INSERT OR IGNORE INTO templates VALUES(?,?,?,?,?,?)",
@@ -159,6 +195,9 @@ class Store:
                 )
             self._ensure_demo_user(db)
             self._ensure_demo_app(db)
+            db.execute("UPDATE admin_accounts SET status='disabled' WHERE username='demo'")
+            db.execute("DELETE FROM admin_sessions WHERE admin_id IN "
+                       "(SELECT admin_id FROM admin_accounts WHERE username='demo')")
 
     @staticmethod
     def hash_token(token: str) -> str:
@@ -324,6 +363,50 @@ class Store:
              json.dumps(["device.content.write", "device.read", "device.event.read", "webhook.manage"]),
              "active", now_iso()),
         )
+
+    def ensure_admin(self, username: str, password: str) -> None:
+        """Create or refresh the configured local administrator from environment settings."""
+        username = username.strip()
+        if not username or not password:
+            return
+        salt = secrets.token_hex(16)
+        admin_id = "admin-" + secrets.token_hex(8)
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO admin_accounts(admin_id,username,password_hash,password_salt,display_name,status,created_at) "
+                "VALUES(?,?,?,?,?,'active',?) ON CONFLICT(username) DO UPDATE SET "
+                "password_hash=excluded.password_hash,password_salt=excluded.password_salt,status='active'",
+                (admin_id, username, self._password_hash(password, salt), salt, "平台管理员", now_iso()),
+            )
+
+    def login_admin(self, username: str, password: str) -> tuple[dict[str, Any], str] | None:
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM admin_accounts WHERE username=?", (username.strip(),)).fetchone()
+            if not row or row["status"] != "active" or not secrets.compare_digest(
+                    row["password_hash"], self._password_hash(password, row["password_salt"])):
+                return None
+            token = secrets.token_urlsafe(32)
+            expires = (datetime.now(UTC) + timedelta(hours=12)).isoformat()
+            db.execute("INSERT INTO admin_sessions VALUES(?,?,?)", (self.hash_token(token), row["admin_id"], expires))
+        return {"admin_id": row["admin_id"], "username": row["username"], "display_name": row["display_name"]}, token
+
+    def admin_by_session(self, token: str) -> dict[str, Any] | None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT a.admin_id,a.username,a.display_name FROM admin_sessions s "
+                "JOIN admin_accounts a ON a.admin_id=s.admin_id "
+                "WHERE s.token_hash=? AND s.expires_at>? AND a.status='active'",
+                (self.hash_token(token), now_iso()),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_developer_accounts(self) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT developer_id,name,organization,role,email,agreement_version,"
+                "agreement_accepted_at,status,created_at FROM developer_accounts ORDER BY created_at DESC"
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def login(self, username: str, password: str) -> tuple[str, str] | None:
         with self.connect() as db:
@@ -598,6 +681,106 @@ class Store:
             db.execute("INSERT INTO developer_apps VALUES(?,?,?,?,?,?)",
                        (app_id, name, self.hash_token(token), json.dumps(scopes), "active", now_iso()))
         return app_id, token
+
+    def register_developer(self, name: str, organization: str, email: str, password: str,
+                           agreement_version: str, role: str = "developer") -> tuple[str, str]:
+        email = email.strip().lower()
+        salt = secrets.token_hex(16)
+        developer_id = "dev-" + secrets.token_hex(6)
+        accepted_at = now_iso()
+        with self.connect() as db:
+            if db.execute("SELECT 1 FROM developer_accounts WHERE email=?", (email,)).fetchone():
+                raise ValueError("该邮箱已注册")
+            db.execute("INSERT INTO developer_accounts "
+                       "(developer_id,name,organization,role,email,password_hash,password_salt,agreement_version,agreement_accepted_at,status,created_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?)", (
+                developer_id, name.strip(), organization.strip(), role, email,
+                self._password_hash(password, salt), salt, agreement_version, accepted_at, "active", accepted_at,
+            ))
+        return developer_id, self.create_developer_session(developer_id)
+
+    def create_developer_session(self, developer_id: str) -> str:
+        token = secrets.token_urlsafe(32)
+        expires = (datetime.now(UTC) + timedelta(days=30)).isoformat()
+        with self.connect() as db:
+            db.execute("INSERT INTO developer_sessions VALUES(?,?,?)", (self.hash_token(token), developer_id, expires))
+        return token
+
+    def login_developer(self, email: str, password: str) -> tuple[str, str] | None:
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM developer_accounts WHERE email=?", (email.strip().lower(),)).fetchone()
+        if not row or row["status"] != "active" or not secrets.compare_digest(
+                row["password_hash"], self._password_hash(password, row["password_salt"])):
+            return None
+        return row["developer_id"], self.create_developer_session(row["developer_id"])
+
+    def developer_by_session(self, token: str) -> dict[str, Any] | None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT a.developer_id,a.name,a.organization,a.role,a.email,a.agreement_version,a.status,a.created_at "
+                "FROM developer_sessions s JOIN developer_accounts a ON a.developer_id=s.developer_id "
+                "WHERE s.token_hash=? AND s.expires_at>?", (self.hash_token(token), now_iso()),
+            ).fetchone()
+        return dict(row) if row and row["status"] == "active" else None
+
+    def create_sandbox_app(self, developer_id: str, name: str, scene: str, description: str) -> tuple[dict[str, Any], str]:
+        app_id, token, ts = "sand-" + secrets.token_hex(6), secrets.token_urlsafe(32), now_iso()
+        with self.connect() as db:
+            db.execute("INSERT INTO sandbox_apps VALUES(?,?,?,?,?,?,?,?,?,?,?)", (
+                app_id, developer_id, name, scene, description, "sandbox", self.hash_token(token),
+                "0.1.0", "", ts, ts,
+            ))
+        return self.sandbox_app(app_id, developer_id), token
+
+    def sandbox_app(self, app_id: str, developer_id: str | None = None) -> dict[str, Any] | None:
+        sql, params = "SELECT app_id,developer_id,name,scene,description,status,version,review_note,created_at,updated_at FROM sandbox_apps WHERE app_id=?", [app_id]
+        if developer_id:
+            sql, params = sql + " AND developer_id=?", [app_id, developer_id]
+        with self.connect() as db:
+            row = db.execute(sql, params).fetchone()
+        return dict(row) if row else None
+
+    def list_sandbox_apps(self, developer_id: str | None = None) -> list[dict[str, Any]]:
+        sql, params = "SELECT app_id,developer_id,name,scene,description,status,version,review_note,created_at,updated_at FROM sandbox_apps", []
+        if developer_id:
+            sql, params = sql + " WHERE developer_id=?", [developer_id]
+        sql += " ORDER BY updated_at DESC"
+        with self.connect() as db:
+            return [dict(row) for row in db.execute(sql, params).fetchall()]
+
+    def submit_sandbox_app(self, app_id: str, developer_id: str, version: str, notes: str) -> bool:
+        with self.connect() as db:
+            cur = db.execute("UPDATE sandbox_apps SET status='in_review',version=?,review_note=?,updated_at=? "
+                             "WHERE app_id=? AND developer_id=? AND status IN ('sandbox','rejected')",
+                             (version, notes, now_iso(), app_id, developer_id))
+        return cur.rowcount > 0
+
+    def review_sandbox_app(self, app_id: str, decision: str, note: str) -> bool:
+        status_value = "published" if decision == "approve" else "rejected"
+        with self.connect() as db:
+            cur = db.execute("UPDATE sandbox_apps SET status=?,review_note=?,updated_at=? WHERE app_id=? AND status='in_review'",
+                             (status_value, note, now_iso(), app_id))
+        return cur.rowcount > 0
+
+    def save_model_config(self, app_id: str, provider: str, model: str, base_url: str,
+                          credential_encrypted: str, system_prompt: str) -> None:
+        with self.connect() as db:
+            existing = db.execute("SELECT credential_encrypted FROM developer_model_configs WHERE app_id=?", (app_id,)).fetchone()
+            credential = credential_encrypted or (existing["credential_encrypted"] if existing else "")
+            db.execute("INSERT INTO developer_model_configs VALUES(?,?,?,?,?,?,?) ON CONFLICT(app_id) DO UPDATE SET "
+                       "provider=excluded.provider,model=excluded.model,base_url=excluded.base_url,"
+                       "credential_encrypted=excluded.credential_encrypted,system_prompt=excluded.system_prompt,updated_at=excluded.updated_at",
+                       (app_id, provider, model, base_url, credential, system_prompt, now_iso()))
+
+    def get_model_config(self, app_id: str) -> dict[str, Any] | None:
+        with self.connect() as db:
+            row = db.execute("SELECT provider,model,base_url,credential_encrypted,system_prompt,updated_at "
+                             "FROM developer_model_configs WHERE app_id=?", (app_id,)).fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        result["api_key_configured"] = bool(result.pop("credential_encrypted"))
+        return result
 
     def authenticate_app(self, token: str) -> dict[str, Any] | None:
         with self.connect() as db:

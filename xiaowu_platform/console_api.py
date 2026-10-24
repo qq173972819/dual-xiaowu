@@ -26,7 +26,9 @@ from . import finance as _finance
 store = Store(settings.database_path)
 router = APIRouter()
 
-ONLINE_WINDOW = timedelta(minutes=15)
+# 双屏固件按彩屏间隔（默认 30 分钟）拉图/上报心跳，窗口必须大于刷新周期，
+# 否则两次心跳之间设备会被误判离线。45min = 30min 周期 + 15min 余量。
+ONLINE_WINDOW = timedelta(minutes=45)
 
 
 def current_user(

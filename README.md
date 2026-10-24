@@ -40,7 +40,7 @@ python -m venv .venv
 启动后：
 - 接口文档（Swagger）：`http://127.0.0.1:8104/docs`
 - 健康检查：`GET http://127.0.0.1:8104/health`
-- 演示账号：`demo` / `demo1234`
+- 管理员账号通过环境变量 `XIAOWU_ADMIN_USERNAME` 和 `XIAOWU_ADMIN_PASSWORD` 配置；请在本机设置，不要提交真实凭据。
 
 另开终端运行模拟器：
 
@@ -48,7 +48,15 @@ python -m venv .venv
 python tools/s3_simulator.py --server http://127.0.0.1:8104
 ```
 
-模拟器首次启动会在开发模式自动注册，随后轮询任务。打开 `http://127.0.0.1:8104/docs` 可调用 OpenAPI；默认开发者密钥为 `dev-app-key`，管理密钥为 `dev-admin-key`。生产环境必须设置 `XIAOWU_DEV_MODE=false` 并替换所有密钥。
+模拟器首次启动会在开发模式自动注册，随后轮询任务。打开 `http://127.0.0.1:8104/docs` 可调用 OpenAPI；管理员登录账号由环境变量提供。生产环境必须设置 `XIAOWU_DEV_MODE=false` 并配置专用管理员账号、密码及管理密钥。
+
+PowerShell 本地启动管理员示例（密码仅存在于当前终端会话）：
+
+```powershell
+$env:XIAOWU_ADMIN_USERNAME = "your-admin-name"
+$env:XIAOWU_ADMIN_PASSWORD = Read-Host "管理员密码" -AsSecureString | ConvertFrom-SecureString -AsPlainText
+python -m uvicorn xiaowu_platform.main:app --reload --port 8104
+```
 
 > **端口说明**：本平台后端统一运行在 **8104**。`apps/content-console-cn`（PC 内容后台）通过环境变量 `INKSIGHT_BACKEND_API_BASE` 默认指向 `http://127.0.0.1:8104`；`services/legacy-api` 为旧的兼容后端，已在本次整合中让出 8104，请勿同时占用。
 

@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 8103",
+    "dev": "next dev -p 8094",
     "build": "next build --webpack",
-    "start": "next start -p 8103"
+    "start": "next start -p 8094"
   },
   "dependencies": {
     "lucide-react": "^0.564.0",

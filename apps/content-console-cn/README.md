@@ -4,23 +4,31 @@
 
 ## 本地启动
 
-先启动 小悟AI 后端（终端 1）：
+> ⚠️ 本目录是「森穹小悟 S3 开放平台」内置的双屏内容后台，**不要**再用旧仓库的 `../backend`(8080) 或 `../dual`(8094)。旧栈与本项目无关，连了也是连错后端。
+
+先启动本工程后端（终端 1，仓库根目录）：
 
 ```powershell
-cd E:\electron\screen\inksight-main\inksight-main\backend
-.\.venv\Scripts\python.exe -m uvicorn api.index:app --host 0.0.0.0 --port 8080
+cd E:\electron\screen\inksight-main\inksight-main\xiaowu-s3-open-platform
+.\run_backend.bat
+# 等价命令（注意必须 0.0.0.0，127.0.0.1:8104 在本机被占用会绑不上）：
+# .\.venv\Scripts\python.exe -m uvicorn xiaowu_platform.main:app --host 0.0.0.0 --port 8104 --reload
 ```
 
-再启动双屏后台（终端 2）：
+再启动本控制台（终端 2）：
 
 ```powershell
-cd E:\electron\screen\inksight-main\inksight-main\dual
+cd E:\electron\screen\inksight-main\inksight-main\xiaowu-s3-open-platform\apps\content-console-cn
 npm run dev
 ```
 
-浏览器打开 `http://localhost:8094`。默认代理到 `http://127.0.0.1:8080`，可通过 `INKSIGHT_BACKEND_API_BASE` 修改。
+浏览器打开 `http://localhost:8094`。代理目标由 `apps/content-console-cn/.env.local` 的
+`INKSIGHT_BACKEND_API_BASE`（默认 `http://127.0.0.1:8104`）决定，已与后端端口对齐。
 
-如果注册或登录显示 500，先确认第一个终端中的 FastAPI 后端仍在运行。正常的未登录健康检查应返回 HTTP 401，而不是 500。
+如果注册或登录显示 500，先确认后端(8104)仍在运行。正常的未登录健康检查应返回 HTTP 401，而不是 500。
+
+> 注意：此控制台通过「应用到设备」把双屏配置 POST 到 `/api/device/<mac>/dual-config`，
+> 后端写入设备内容配置并置位 `pending_refresh`，固件下次取图（≤1 分钟）即生效。
 
 ## 当前能力
 

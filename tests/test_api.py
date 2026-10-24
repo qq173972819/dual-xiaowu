@@ -81,3 +81,53 @@ def test_plugin_manifests_match_s3(tmp_path: Path):
     for plugin in plugins:
         supported, missing = plugin.supports(DeviceCapabilities().model_dump())
         assert supported, missing
+
+
+def test_developer_sandbox_review_and_publish_flow(tmp_path: Path):
+    store = Store(tmp_path / "creator.db")
+    store.init()
+    developer_id, session = store.register_developer(
+        "创作者", "测试团队", "creator@example.com", "safe-pass-123", "2026-10-23", "content_creator"
+    )
+    developer = store.developer_by_session(session)
+    assert developer and developer["developer_id"] == developer_id
+    assert developer["role"] == "content_creator"
+
+    app, sandbox_token = store.create_sandbox_app(
+        developer_id, "墨水日程", "office", "把会议与专注时间放到双屏"
+    )
+    assert sandbox_token and app["status"] == "sandbox"
+    assert store.submit_sandbox_app(app["app_id"], developer_id, "0.1.0", "首个版本")
+    assert store.sandbox_app(app["app_id"])["status"] == "in_review"
+    assert store.review_sandbox_app(app["app_id"], "approve", "内容与刷新频率合规")
+    assert store.sandbox_app(app["app_id"])["status"] == "published"
+
+
+def test_developer_model_config_never_returns_secret(tmp_path: Path):
+    store = Store(tmp_path / "model.db")
+    store.init()
+    developer_id, _ = store.register_developer(
+        "模型开发者", "", "model@example.com", "safe-pass-123", "2026-10-23"
+    )
+    app, _ = store.create_sandbox_app(developer_id, "AI 晨报", "custom", "")
+    store.save_model_config(app["app_id"], "deepseek", "deepseek-chat", "", "encrypted-secret", "简洁输出")
+    config = store.get_model_config(app["app_id"])
+    assert config and config["api_key_configured"] is True
+    assert "credential_encrypted" not in config
+
+
+def test_demo_admin_can_view_all_creators_and_apps(tmp_path: Path):
+    store = Store(tmp_path / "admin.db")
+    store.init()
+    store.ensure_admin("test-admin", "test-only-password")
+    result = store.login_admin("test-admin", "test-only-password")
+    assert result
+    admin, token = result
+    assert admin["username"] == "test-admin"
+    assert store.admin_by_session(token)["username"] == "test-admin"
+    developer_id, _ = store.register_developer(
+        "IP 主理人", "小悟内容社", "ip@example.com", "safe-pass-123", "2026-10-23", "ip_owner"
+    )
+    app, _ = store.create_sandbox_app(developer_id, "城市文化日历", "custom", "每日城市文化内容")
+    assert store.list_developer_accounts()[0]["role"] == "ip_owner"
+    assert store.list_sandbox_apps()[0]["name"] == app["name"]

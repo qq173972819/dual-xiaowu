@@ -1,9 +1,11 @@
 @echo off
-REM 森穹小悟 S3 开放平台 · 一键启动后端
-REM 后端默认端口 8104（与 apps/content-console-cn 的默认后端地址一致）
+REM Xiaowu S3 Open Platform - one-click backend launcher
+REM Backend port 8104, matching apps/content-console-cn proxy default.
+REM NOTE: keep this file ASCII-only. cmd.exe parses .bat with GBK codepage,
+REM any Chinese here becomes mojibake and breaks execution.
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (
-  echo [首次] 创建虚拟环境并安装依赖...
+  echo [first run] creating venv and installing dependencies...
   python -m venv .venv
   call .venv\Scripts\activate.bat
   python -m pip install -r requirements.txt
@@ -12,11 +14,13 @@ if not exist ".venv\Scripts\python.exe" (
 )
 echo.
 echo ============================================================
-echo  小悟后台已启动: http://127.0.0.1:8104
-echo  接口文档(Swagger): http://127.0.0.1:8104/docs
-echo  演示账号: demo / demo1234
-echo  按 Ctrl+C 停止
+echo  Backend:  http://0.0.0.0:8104   (LAN: http://192.168.x.x:8104)
+echo  Swagger:  http://127.0.0.1:8104/docs
+echo  Admin account: configure XIAOWU_ADMIN_USERNAME and XIAOWU_ADMIN_PASSWORD first
+echo  Press Ctrl+C to stop
 echo ============================================================
 echo.
-python -m uvicorn xiaowu_platform.main:app --host 127.0.0.1 --port 8104 --reload
+REM --host MUST be 0.0.0.0: 127.0.0.1:8104 is occupied by a hidden loopback
+REM forward on this machine, and the firmware reaches the backend via LAN IP.
+python -m uvicorn xiaowu_platform.main:app --host 0.0.0.0 --port 8104 --reload
 pause

@@ -5,7 +5,11 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from fastapi.responses import HTMLResponse
 
-from .models import ContentConfigIn, ContentPush, DeveloperAppCreate, DeviceCapabilities, DeviceEvent, DeviceRegister, Heartbeat, MobileContentPush, PasswordLogin, TaskAck, TemplateUpsert, WebhookCreate
+from .models import (AdminLogin, ContentConfigIn, ContentPush, DeveloperAppCreate, DeveloperLogin,
+                     DeveloperRegister, DeviceCapabilities, DeviceEvent, DeviceRegister,
+                     Heartbeat, MobileContentPush, ModelConfigUpsert, PasswordLogin,
+                     ReviewDecision, ReviewSubmit, SandboxAppCreate, TaskAck,
+                     TemplateUpsert, WebhookCreate)
 from .connector_api import router as connector_router
 from .connectors import ConnectorRegistry, CredentialVault
 from .plugin_runtime import PluginRegistry
@@ -23,6 +27,7 @@ credential_vault = CredentialVault(settings.connector_master_key)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     store.init()
+    store.ensure_admin(settings.admin_username, settings.admin_password)
     yield
 
 
@@ -61,10 +66,23 @@ def current_user(x_user_token: Annotated[str | None, Header()] = None) -> str:
     return user_id
 
 
-def require_admin(x_admin_key: Annotated[str | None, Header()] = None) -> str:
-    if x_admin_key != settings.admin_key:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid admin key")
-    return "admin"
+def current_developer(authorization: Annotated[str | None, Header()] = None) -> dict:
+    token = authorization[7:].strip() if authorization and authorization.lower().startswith("bearer ") else ""
+    developer = store.developer_by_session(token)
+    if not developer:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid developer session")
+    return developer
+
+
+def require_admin(x_admin_key: Annotated[str | None, Header()] = None,
+                  authorization: Annotated[str | None, Header()] = None) -> str:
+    if x_admin_key == settings.admin_key:
+        return "admin-key"
+    token = authorization[7:].strip() if authorization and authorization.lower().startswith("bearer ") else ""
+    admin = store.admin_by_session(token)
+    if not admin:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid admin credentials")
+    return admin["admin_id"]
 
 
 def require_device_header(device_id: str,
@@ -199,6 +217,89 @@ def list_webhooks(app_info: dict = Depends(current_app)) -> list[dict]:
     return store.list_webhooks(app_info["app_id"])
 
 
+# 开发者中心：账号、沙箱应用、模型配置与审核提交。
+@app.post("/developer/v1/auth/register", status_code=201)
+def developer_register(body: DeveloperRegister) -> dict[str, str]:
+    if not body.accepted_terms or not body.accepted_content_policy:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "必须同意开发者协议与内容安全规范")
+    try:
+        developer_id, token = store.register_developer(
+            body.name, body.organization, body.email, body.password, body.agreement_version, body.role,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    store.audit(developer_id, "developer.register", developer_id, {
+        "agreement_version": body.agreement_version, "role": body.role,
+    })
+    return {"developer_id": developer_id, "token": token}
+
+
+@app.post("/developer/v1/auth/login")
+def developer_login(body: DeveloperLogin) -> dict[str, str]:
+    result = store.login_developer(body.email, body.password)
+    if not result:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "邮箱或密码错误")
+    developer_id, token = result
+    return {"developer_id": developer_id, "token": token}
+
+
+@app.get("/developer/v1/me")
+def developer_me(developer: dict = Depends(current_developer)) -> dict:
+    return developer
+
+
+@app.get("/developer/v1/hardware")
+def developer_hardware() -> dict:
+    return {
+        "device": "小悟 S3 一体双屏", "refresh_strategy": "局部刷新优先，避免动画与高频刷新",
+        "screens": [
+            {"port": "FPC1", "id": "A", "type": "黑白电子墨水屏", "colors": ["black", "white"], "usage": "高频信息、文字与状态"},
+            {"port": "FPC2", "id": "B", "type": "三色/四色全刷电子墨水屏", "colors": ["black", "white", "red", "yellow"], "usage": "低频海报、重点提示与氛围内容"},
+        ],
+        "rules": ["不依赖动画表达状态", "避免大面积连续反色", "提供纯黑白降级", "文字字号不小于 18px", "全刷内容建议间隔不少于 15 分钟"],
+    }
+
+
+@app.get("/developer/v1/apps")
+def developer_apps(developer: dict = Depends(current_developer)) -> list[dict]:
+    return store.list_sandbox_apps(developer["developer_id"])
+
+
+@app.post("/developer/v1/apps", status_code=201)
+def developer_create_sandbox_app(body: SandboxAppCreate, developer: dict = Depends(current_developer)) -> dict:
+    app_info, token = store.create_sandbox_app(
+        developer["developer_id"], body.name, body.scene, body.description,
+    )
+    store.audit(developer["developer_id"], "sandbox_app.create", app_info["app_id"], {"scene": body.scene})
+    return {**app_info, "sandbox_token": token}
+
+
+@app.put("/developer/v1/apps/{app_id}/model")
+def developer_model_save(app_id: str, body: ModelConfigUpsert,
+                         developer: dict = Depends(current_developer)) -> dict:
+    if not store.sandbox_app(app_id, developer["developer_id"]):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "应用不存在")
+    encrypted = credential_vault.encrypt({"api_key": body.api_key}) if body.api_key else ""
+    store.save_model_config(app_id, body.provider, body.model, body.base_url, encrypted, body.system_prompt)
+    store.audit(developer["developer_id"], "model_config.update", app_id, {"provider": body.provider, "model": body.model})
+    return store.get_model_config(app_id) or {}
+
+
+@app.get("/developer/v1/apps/{app_id}/model")
+def developer_model_get(app_id: str, developer: dict = Depends(current_developer)) -> dict:
+    if not store.sandbox_app(app_id, developer["developer_id"]):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "应用不存在")
+    return store.get_model_config(app_id) or {"api_key_configured": False}
+
+
+@app.post("/developer/v1/apps/{app_id}/submit", status_code=202)
+def developer_submit(app_id: str, body: ReviewSubmit, developer: dict = Depends(current_developer)) -> dict:
+    if not store.submit_sandbox_app(app_id, developer["developer_id"], body.version, body.notes):
+        raise HTTPException(status.HTTP_409_CONFLICT, "仅沙箱或已驳回应用可提交审核")
+    store.audit(developer["developer_id"], "sandbox_app.submit", app_id, {"version": body.version})
+    return {"app_id": app_id, "status": "in_review"}
+
+
 # 小程序端：只提供用户自助内容管理，不暴露运营能力。
 @app.post("/api/v1/mobile/login")
 def mobile_login(body: PasswordLogin) -> dict[str, str]:
@@ -287,6 +388,21 @@ def mobile_save_content_config(device_id: str, body: ContentConfigIn, user_id: s
 
 
 # PC 运营后台：全局设备、内容模板、任务、插件与审计都仅在这里开放。
+@app.post("/admin/v1/auth/login")
+def admin_login(body: AdminLogin) -> dict:
+    result = store.login_admin(body.username, body.password)
+    if not result:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "管理员账号或密码错误")
+    admin, token = result
+    store.audit(admin["admin_id"], "admin.login", admin["admin_id"], {})
+    return {**admin, "token": token}
+
+
+@app.get("/admin/v1/auth/me")
+def admin_me(actor: str = Depends(require_admin)) -> dict:
+    return {"admin_id": actor}
+
+
 @app.get("/admin/v1/overview")
 def admin_overview(_: str = Depends(require_admin)) -> dict:
     return store.overview()
@@ -335,6 +451,24 @@ def admin_create_app(body: DeveloperAppCreate, actor: str = Depends(require_admi
 @app.get("/admin/v1/developer-apps")
 def admin_apps(_: str = Depends(require_admin)) -> list[dict]:
     return store.list_developer_apps()
+
+
+@app.get("/admin/v1/creator-accounts")
+def admin_creator_accounts(_: str = Depends(require_admin)) -> list[dict]:
+    return store.list_developer_accounts()
+
+
+@app.get("/admin/v1/developer-submissions")
+def admin_developer_submissions(_: str = Depends(require_admin)) -> list[dict]:
+    return store.list_sandbox_apps()
+
+
+@app.post("/admin/v1/developer-submissions/{app_id}/decision")
+def admin_developer_decision(app_id: str, body: ReviewDecision, actor: str = Depends(require_admin)) -> dict:
+    if not store.review_sandbox_app(app_id, body.decision, body.note):
+        raise HTTPException(status.HTTP_409_CONFLICT, "仅审核中的应用可处理")
+    store.audit(actor, f"sandbox_app.{body.decision}", app_id, {"note": body.note})
+    return {"app_id": app_id, "status": "published" if body.decision == "approve" else "rejected"}
 
 
 @app.get("/admin/v1/webhook-outbox")

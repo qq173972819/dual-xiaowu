@@ -78,6 +78,51 @@ class DeveloperAppCreate(BaseModel):
     scopes: list[Literal["device.content.write", "device.read", "device.event.read", "webhook.manage"]]
 
 
+class DeveloperRegister(BaseModel):
+    name: str = Field(min_length=2, max_length=50)
+    organization: str = Field(default="", max_length=100)
+    role: Literal["developer", "content_creator", "ip_owner", "channel_partner", "other"] = "developer"
+    email: str = Field(min_length=5, max_length=120, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+    password: str = Field(min_length=8, max_length=128)
+    agreement_version: Literal["2026-10-23"]
+    accepted_terms: bool
+    accepted_content_policy: bool
+
+
+class DeveloperLogin(BaseModel):
+    email: str = Field(min_length=5, max_length=120)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class AdminLogin(BaseModel):
+    username: str = Field(min_length=2, max_length=50)
+    password: str = Field(min_length=4, max_length=128)
+
+
+class SandboxAppCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    scene: Literal["office", "study", "family", "finance", "wellness", "custom"]
+    description: str = Field(default="", max_length=500)
+
+
+class ModelConfigUpsert(BaseModel):
+    provider: Literal["openai-compatible", "deepseek", "qwen", "doubao"]
+    model: str = Field(min_length=1, max_length=100)
+    base_url: str = Field(default="", max_length=500)
+    api_key: str = Field(default="", max_length=500)
+    system_prompt: str = Field(default="", max_length=2000)
+
+
+class ReviewSubmit(BaseModel):
+    version: str = Field(default="0.1.0", max_length=40)
+    notes: str = Field(default="", max_length=1000)
+
+
+class ReviewDecision(BaseModel):
+    decision: Literal["approve", "reject"]
+    note: str = Field(default="", max_length=1000)
+
+
 class WebhookCreate(BaseModel):
     url: str = Field(min_length=10, max_length=500, pattern=r"^https://")
     events: list[Literal["device.event", "task.displayed", "task.failed"]]

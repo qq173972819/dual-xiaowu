@@ -103,6 +103,15 @@ public:
     static std::string LoadServerUrl();
     static void SaveServerUrl(const std::string& server);
 
+    // 自动选路（联网后调用）：优先 NVS 手工覆盖（仅当可达），否则按
+    // INKSIGHT_SERVER_CANDIDATES 探测首个可达后端，最后兜底生产域名。
+    // network 为空时直接返回编译期默认地址。
+    static std::string ResolveServerUrl(NetworkInterface* network);
+
+    // 探测 base_url 是否为可达的真后端（GET /health 返回 2xx）。
+    static bool ProbeServerHealth(NetworkInterface* network,
+                                  const std::string& base_url);
+
     // 后端在下发渲染结果时若带 X-Pending-Refresh: 1（内容后台点了
     // 「应用到设备」），取图时会置位此标记。刷新循环每分钟调用一次
     // TakePendingRefresh()，返回 true 表示立即刷一次双屏。

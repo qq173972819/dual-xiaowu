@@ -1599,7 +1599,11 @@ public:
             // 8104，PC 也换到 192.168.101.x 网段）。已烧录这些固件的机器开机
             // 自动迁移到新的 INKSIGHT_DEFAULT_SERVER_URL。
             inksight_server_ == "http://192.168.1.4:8092" ||
-            inksight_server_ == "192.168.1.4:8092") {
+            inksight_server_ == "192.168.1.4:8092" ||
+            // 上一版编译期默认 192.168.101.69:8104（办公点 B 调试值）：
+            // 跨办公点后可能不可达，迁移掉以交给自动选路逻辑。
+            inksight_server_ == "http://192.168.101.69:8104" ||
+            inksight_server_ == "192.168.101.69:8104") {
             inksight_server_ = INKSIGHT_DEFAULT_SERVER_URL;
             InkSightClient::SaveServerUrl(inksight_server_);
             ESP_LOGI(kTag, "Migrated InkSight server to %s",
@@ -1661,6 +1665,12 @@ public:
                 }
                 if (event == NetworkEvent::Connected) {
                     Application::GetInstance().Schedule([this]() {
+                        // 联网后自动选路：按办公点内网候选探测 InkSight 后端，
+                        // 不再依赖手动配置（见 InkSightClient::ResolveServerUrl）。
+                        inksight_server_ =
+                            InkSightClient::ResolveServerUrl(GetNetwork());
+                        ESP_LOGI(kTag, "InkSight server resolved: %s",
+                                 inksight_server_.c_str());
                         ApplyPowerMode();
                         // Overwrite any stale runtime mode left by an older
                         // board build, then let an interval wake refresh once

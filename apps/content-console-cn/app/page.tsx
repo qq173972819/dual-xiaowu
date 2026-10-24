@@ -52,6 +52,27 @@ const scenes: Record<SceneKey, Scene> = {
   },
 };
 
+// 场景默认的 A/B 屏 mode，作为兜底避免两侧回落不一致。
+function defaultMode(k: SceneKey, kind: "a" | "b"): string {
+  const m = kind === "a" ? scenes[k].a.mode : scenes[k].b.mode;
+  return m || (kind === "a" ? "notes" : "course");
+}
+
+// 用场景默认配置兜底合并已保存的 config：保证每个场景的 A/B 屏都带合法 mode，
+// 避免「双屏配置」页回落成「自选行情」而「内容管理」页回落成「便签」的不一致。
+function normalizeConfig(saved?: Partial<Record<SceneKey, { a?: Partial<ScreenConfig>; b?: Partial<ScreenConfig> }>>): Record<SceneKey, { a: ScreenConfig; b: ScreenConfig }> {
+  const out = {} as Record<SceneKey, { a: ScreenConfig; b: ScreenConfig }>;
+  (Object.keys(scenes) as SceneKey[]).forEach((k) => {
+    const base = scenes[k];
+    const s = saved?.[k] || {};
+    out[k] = {
+      a: { ...base.a, ...(s.a || {}), mode: s.a?.mode || base.a.mode },
+      b: { ...base.b, ...(s.b || {}), mode: s.b?.mode || base.b.mode },
+    };
+  });
+  return out;
+}
+
 const navItems: { key: NavKey; label: string; icon: typeof Home }[] = [
   { key: "dashboard", label: "总览", icon: LayoutDashboard },
   { key: "scenes", label: "场景中心", icon: Sparkles },
@@ -94,7 +115,7 @@ export default function DualConsole() {
       try {
         const saved = JSON.parse(raw);
         if (saved.sceneKey && scenes[saved.sceneKey as SceneKey]) setSceneKey(saved.sceneKey);
-        if (saved.config) setConfig((prev) => ({ ...prev, ...saved.config }));
+        if (saved.config) setConfig(() => normalizeConfig(saved.config));
         if (saved.deviceMac) setDeviceMac(saved.deviceMac);
         if (saved.content) setContent((prev) => ({
           courseTable: saved.content.courseTable && typeof saved.content.courseTable === "object"
@@ -222,7 +243,7 @@ export default function DualConsole() {
           {!loading && nav === "dashboard" ? <Dashboard user={user} devices={devices} sceneKey={sceneKey} selectedDevice={selectedDevice} setNav={setNav} openAuth={() => setAuthOpen(true)} openPair={() => setPairOpen(true)} /> : null}
           {!loading && nav === "scenes" ? <SceneCenter selected={sceneKey} choose={chooseScene} openConfig={() => setNav("screens")} /> : null}
           {!loading && nav === "screens" ? <ScreenEditor scene={scene} sceneKey={sceneKey} value={config[sceneKey]} update={updateScreen} save={saveConfiguration} savedAt={savedAt} content={content} apply={applyToDevice} hasDevice={!!selectedDevice} deviceMac={selectedDevice?.mac || ""} screen={screen} setScreen={setScreen} /> : null}
-          {!loading && nav === "content" ? <ContentStudio content={content} setContent={setContent} save={saveConfiguration} savedAt={savedAt} notify={notify} apply={applyToDevice} hasDevice={!!selectedDevice} deviceMac={selectedDevice?.mac || ""} screen={screen} sceneKey={sceneKey} aMode={config[sceneKey].a.mode || "notes"} bMode={config[sceneKey].b.mode || "course"} user={user} device={selectedDevice} /> : null}
+          {!loading && nav === "content" ? <ContentStudio content={content} setContent={setContent} save={saveConfiguration} savedAt={savedAt} notify={notify} apply={applyToDevice} hasDevice={!!selectedDevice} deviceMac={selectedDevice?.mac || ""} screen={screen} sceneKey={sceneKey} aMode={config[sceneKey].a.mode || defaultMode(sceneKey, "a")} bMode={config[sceneKey].b.mode || defaultMode(sceneKey, "b")} user={user} device={selectedDevice} /> : null}
           {!loading && nav === "financeStocks" ? <FinanceWatchlist user={user} notify={notify} device={selectedDevice} /> : null}
           {!loading && nav === "devices" ? <DeviceManager devices={devices} user={user} refresh={loadDevices} openAuth={() => setAuthOpen(true)} openPair={() => setPairOpen(true)} notify={notify} choose={(mac) => { setDeviceMac(mac); setNav("screens"); }} /> : null}
           {!loading && nav === "members" ? <MembersPanel device={selectedDevice} user={user} notify={notify} setNav={setNav} /> : null}
@@ -2965,7 +2986,7 @@ function aModePreview(mode: string, content: ContentState): React.ReactNode {
 function DualPreview({ content, screen, sceneKey, aMode, bMode, weatherPreview, weatherLoading, weatherError }: { content: ContentState; screen: { size: "4.2" | "5.83"; colors: 2 | 3 | 4 }; sceneKey: SceneKey; aMode?: string; bMode?: string; weatherPreview?: DualWeatherPreview | null; weatherLoading?: boolean; weatherError?: string }) {
   const dims = screen.size === "5.83" ? "648 × 480" : "400 × 300";
   const bColor = screen.colors === 2 ? "黑白" : screen.colors === 3 ? "黑白红" : "黑白红黄";
-  const mode = aMode || "notes";
+  const mode = aMode || defaultMode(sceneKey, "a");
   const family = sceneKey === "family";
   return (
     <div className="card-pad dual-preview-card">

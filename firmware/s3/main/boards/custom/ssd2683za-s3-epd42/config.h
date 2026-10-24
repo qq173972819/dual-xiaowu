@@ -153,15 +153,35 @@
 #define FPC2_FRAME_BYTES   (FPC2_WIDTH * FPC2_HEIGHT / 4) // 2bpp 彩色帧
 
 // ---------------------------------------------------------------------------
-// InkSight /api/render backend. Leave empty to configure at runtime via
-// the self.epaper.set_inksight_server(...) MCP tool. Otherwise fill with a
-// reachable base URL, e.g. "http://192.168.101.69:8104" for local testing (no
-// trailing slash, no /api/... suffix). The runtime MCP setting overrides this
-// macro. NOTE: 后端统一端口为 8104（见仓库 README）；本值是局域网调试默认，
-// 换网段后需同步更新，或改用固定域名 / 路由器 DHCP 静态分配避免 IP 漂移。
+// InkSight /api/render 后端地址解析（自动选路，免手动配置）。
+// 设备联网后按以下顺序确定后端，无需在每台设备手动配网（见
+// InkSightClient::ResolveServerUrl）：
+//   1) NVS 手工覆盖（KEY- 配网 / MCP set_inksight_server 写入的 server_url）：
+//      仅当该地址当前可达时才优先使用；
+//   2) 编译期候选列表 INKSIGHT_SERVER_CANDIDATES：按各办公点内网 IP + 常用
+//      端口探测（GET /health 返回 2xx 即视为真后端），第一个可达者胜出；
+//   3) 兜底：生产环境单一域名 INKSIGHT_PRODUCTION_SERVER_URL。
+// 换办公点 / 内网 IP 漂移时，只要候选列表覆盖对应网段且设备与后端 PC 处于
+// 同一局域网，设备即自动连上，不必每次改 NVS。新增办公点只需在候选列表追加。
+// 注意：本机后端当前监听 8092（run_backend.bat 注释写 8104，二者并存以兼容）；
+// 候选列表对两个端口都探测，避免端口不一致踩坑。
 // ---------------------------------------------------------------------------
 #ifndef INKSIGHT_DEFAULT_SERVER_URL
-#  define INKSIGHT_DEFAULT_SERVER_URL  "http://192.168.101.69:8104"
+#  define INKSIGHT_DEFAULT_SERVER_URL  "http://192.168.1.4:8092"
+#endif
+
+// 各办公点内网后端候选（IP:端口，逗号分隔）。设备联网后逐个探测 /health，
+// 首个返回 2xx 的即作为后端。两个端口都列以兼容 README(8104) 与实测(8092)。
+// 换办公点时把该办公点"电脑 LAN IP:端口"加进来即可。
+#ifndef INKSIGHT_SERVER_CANDIDATES
+#  define INKSIGHT_SERVER_CANDIDATES                                       \
+    "http://192.168.1.4:8092,http://192.168.1.4:8104,"                    \
+    "http://192.168.101.69:8092,http://192.168.101.69:8104"
+#endif
+
+// 生产环境单一域名（正式出货 / 非测试环境最终落点，单域名）。
+#ifndef INKSIGHT_PRODUCTION_SERVER_URL
+#  define INKSIGHT_PRODUCTION_SERVER_URL  "http://nas.insane.vip:8090"
 #endif
 
 // Restricted credential accepted only by the product backend's LightAcade

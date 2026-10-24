@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include <esp_heap_caps.h>
 #include <esp_log.h>
@@ -20,6 +21,28 @@ constexpr char kTag[] = "InkSight";
 std::string NormalizeServer(std::string server) {
     while (!server.empty() && server.back() == '/') server.pop_back();
     return server;
+}
+
+// 按逗号拆分候选地址列表（容忍首尾空白）。
+std::vector<std::string> SplitCandidates(const char* list) {
+    std::vector<std::string> out;
+    if (!list) return out;
+    std::string s(list);
+    std::string::size_type start = 0;
+    while (start <= s.size()) {
+        auto pos = s.find(',', start);
+        std::string tok = (pos == std::string::npos)
+                              ? s.substr(start)
+                              : s.substr(start, pos - start);
+        const auto b = tok.find_first_not_of(" \t\r\n");
+        const auto e = tok.find_last_not_of(" \t\r\n");
+        if (b != std::string::npos && e != std::string::npos) {
+            out.push_back(tok.substr(b, e - b + 1));
+        }
+        if (pos == std::string::npos) break;
+        start = pos + 1;
+    }
+    return out;
 }
 
 std::string DeviceToken(NetworkInterface* network, const std::string& server,
@@ -668,6 +691,44 @@ std::string InkSightClient::LoadServerUrl() {
 void InkSightClient::SaveServerUrl(const std::string& server) {
     Settings s("inksight", /*read_write=*/true);
     s.SetString("server_url", server);
+}
+
+bool InkSightClient::ProbeServerHealth(NetworkInterface* network,
+                                       const std::string& base_url) {
+    if (!network || base_url.empty()) return false;
+    const std::string url = NormalizeServer(base_url) + "/health";
+    auto http = network->CreateHttp(/*connect_id=*/-1);
+    if (!http) return false;
+    http->SetTimeout(2500);
+    http->SetKeepAlive(false);
+    if (!http->Open("GET", url)) {
+        return false;
+    }
+    const int status = http->GetStatusCode();
+    return status >= 200 && status < 400;
+}
+
+std::string InkSightClient::ResolveServerUrl(NetworkInterface* network) {
+    // 1) NVS 手工覆盖：仅当当前可达才优先使用（避免旧办公点地址卡死）。
+    const std::string manual = LoadServerUrl();
+    if (!manual.empty() && ProbeServerHealth(network, manual)) {
+        ESP_LOGI(kTag, "server: NVS override reachable -> %s",
+                 manual.c_str());
+        return manual;
+    }
+    // 2) 候选列表探测：各办公点内网后端，首个可达者胜出。
+    for (const auto& cand : SplitCandidates(INKSIGHT_SERVER_CANDIDATES)) {
+        if (ProbeServerHealth(network, cand)) {
+            ESP_LOGI(kTag, "server: auto-resolved LAN backend -> %s",
+                     cand.c_str());
+            return cand;
+        }
+    }
+    // 3) 兜底：生产环境单一域名（连不上时上层调用照常报错，日志可见）。
+    ESP_LOGW(kTag,
+             "server: no LAN backend reachable, fallback to production %s",
+             INKSIGHT_PRODUCTION_SERVER_URL);
+    return INKSIGHT_PRODUCTION_SERVER_URL;
 }
 
 // ---------------------------------------------------------------------------
