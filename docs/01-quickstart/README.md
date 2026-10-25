@@ -1,6 +1,6 @@
 # 十分钟接入
 
-1. 启动 API：`python -m uvicorn xiaowu_platform.main:app --port 8100`。
+1. 启动 API：`python -m uvicorn INKSIGHT_platform.main:app --port 8100`。
 2. 运行 `tools/s3_simulator.py` 注册模拟 S3，保存返回的设备令牌。
 3. PC 运营后台使用管理员密钥创建 Developer App，保存只显示一次的应用 Token。
 4. 使用 `Authorization: Bearer <token>` 调用内容接口。

@@ -5,7 +5,7 @@ is independently configurable in `idf.py menuconfig` as **4.2" (400x300)** or
 **5.83" (648x480)**:
 - **FPC1**: SSD1619 black/white fast-refresh information display (XiaoZhi
   conversation + learning dashboard). The main UI / `GetDisplay()` panel.
-- **FPC2**: SSD2683ZA black/white/yellow/red image display (album / InkSight).
+- **FPC2**: SSD2683ZA black/white/yellow/red image display (album / XiaoWu).
 It uses an ES8311 audio codec, ZTS6216 analog microphone and NS4150B amplifier.
 
 The pin assignments in `config.h` were taken from
@@ -26,7 +26,7 @@ DIN(GPIO6)/CLK(GPIO8)/DC(GPIO10)/RST(GPIO11), with independent CS/BUSY:
 | Socket | Role | Panel (default) | CS | BUSY |
 | --- | --- | --- | --- | --- |
 | FPC1 / CS2 | 对话信息屏 + 学习 dashboard（快刷） | SSD1619 黑白 1bpp（默认 4.2"，可配 5.83"） | GPIO39 | GPIO40 |
-| FPC2 / CS1 | 相册 / InkSight 图像 | SSD2683ZA 黑白黄红四色 2bpp（默认 4.2"，可配 5.83"） | GPIO9 | GPIO12 |
+| FPC2 / CS1 | 相册 / XiaoWu 图像 | SSD2683ZA 黑白黄红四色 2bpp（默认 4.2"，可配 5.83"） | GPIO9 | GPIO12 |
 
 ### Panel size configuration (menuconfig)
 
@@ -37,7 +37,7 @@ only for this board (`BOARD_TYPE_SSD2683ZA_S3_EPD42`):
 - **FPC2 (color image) panel size**: `4.2 inch (400x300)` / `5.83 inch (648x480)`
 - **FPC2 (color image) panel color count**: `4-color (B/W/Y/R)` / `3-color (B/W/R)`
 
-The two sockets are configured independently. All buffer sizes, the InkSight
+The two sockets are configured independently. All buffer sizes, the XiaoWu
 `/api/render` request dimensions, the JPEG-to-BWR converter and the SSD2683ZA
 `0x61` resolution command derive from these choices, so a 4.2"/5.83" mix builds
 correctly.
@@ -60,7 +60,7 @@ correctly.
   unbound MAC/pair-code image and the owner's configured mode both use all
   four panel colors. Each refresh is a full refresh.
 - On first network connection, FPC2 requests `/api/render` with the device MAC.
-  The backend's unbound response contains the InkSight pairing code and MAC;
+  The backend's unbound response contains the XiaoWu pairing code and MAC;
   while unbound the firmware refreshes it every four minutes (the code expires
   after ten minutes). Once claimed, the same endpoint serves the owner's
   configured image instead. FPC1 remains the XiaoZhi conversation/activation
@@ -69,10 +69,10 @@ correctly.
   panel refreshes (`Ssd2683zaColorPanel::IsRefreshing`), SSD1619 hardware resets
   wait; the color driver likewise waits for SSD1619 BUSY before resetting.
 - Startup probe: if the FPC2 socket is empty, `Init()` fails and the
-  firmware degrades to the legacy single-screen behavior (InkSight frames
+  firmware degrades to the legacy single-screen behavior (XiaoWu frames
   rendered as 1-bit BMP on the SSD1619).
 - Auto refresh: `ColorRefreshTask` refreshes the color screen every
-  `color_refresh_minutes` (NVS `inksight`, default 30; 0 disables).
+  `color_refresh_minutes` (NVS `XiaoWu`, default 30; 0 disables).
 - Build switch: `EPD_ENABLE_COLOR_SCREEN=0` compiles the color screen out.
 - New MCP tools: `self.epaper.refresh_color_screen`,
   `self.epaper.set_color_refresh_minutes`, `self.epaper.screen_status`.
@@ -95,10 +95,10 @@ Implemented pages:
 - The `self.epaper.show_sd_image` tool displays JPG/JPEG files from
   `/xiaozhi/images` on FPC2 using the onboard JPEG decoder and a B/W+red
   ordered-dither conversion. `self.epaper.show_backend_album` displays the
-  device owner's MY_ADAPTIVE Photo Frame from InkSight on FPC2.
+  device owner's MY_ADAPTIVE Photo Frame from XiaoWu on FPC2.
 - Put JPEG files under the TF card's `/xiaozhi/images` directory, then ask
   XiaoZhi to call `self.epaper.show_sd_image` with the file name. For a photo
-  uploaded to the device's InkSight Photo Frame configuration, call
+  uploaded to the device's XiaoWu Photo Frame configuration, call
   `self.epaper.show_backend_album`.
 - Album caption is persisted on the FPC1 information dashboard.
 - NVS-backed generic API quota summary.

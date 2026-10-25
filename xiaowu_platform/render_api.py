@@ -149,10 +149,40 @@ def preview(
     h: int = Query(default=300, ge=100, le=1200),
     colors: int = Query(default=4, ge=2, le=6),
     bpp: int = Query(default=2, ge=1, le=4),
+    sceneKey: Optional[str] = Query(default=None),
+    aMode: Optional[str] = Query(default=None),
+    bMode: Optional[str] = Query(default=None),
     x_device_token: Optional[str] = Header(default=None),
 ):
-    """浏览器快照预览：返回 PNG，便于在内容后台/小程序直接核对设备将显示的内容。"""
+    """浏览器快照预览：返回 PNG，便于在内容后台/小程序直接核对设备将显示的内容。
+
+    支持即时预览覆盖参数 aMode/bMode/sceneKey：无需保存设备配置，直接按所选屏模式渲染，
+    供内容后台「双屏配置」下拉切换模式时即时预览（与设备渲染同源，所见即所得）。
+    """
     screen = "B" if str(persona or "").upper() == "DUAL_B" else "A"
+    # 即时预览覆盖：按所选模式直接出图（不依赖已保存的设备配置）
+    if aMode or bMode or sceneKey:
+        sk = (sceneKey or "finance").strip() or "finance"
+        override_cfg = {
+            "version": 1,
+            "sceneKey": sk,
+            "screen": {"size": "4.2", "colors": colors},
+            "config": {
+                sk: {
+                    "a": {"mode": (aMode or "finance-watch"), "title": (aMode or "实时行情")},
+                    "b": {"mode": (bMode or "finance-trend"), "title": (bMode or "行情趋势")},
+                }
+            },
+        }
+        try:
+            if screen == "B":
+                img = render_dual_screen("DEMO", "B", w, h, colors, override_cfg)
+            else:
+                img = render_dual_screen("DEMO", "A", w, h, 2, override_cfg)
+        except Exception:  # noqa: BLE001
+            img = render_error("DEMO", w, h)
+        return Response(content=image_to_png_bytes(img), media_type="image/png",
+                        headers={"X-Mode-Id": str(persona or ""), "X-Cache-Hit": "0", "X-Preview-Override": "1"})
     if mac:
         mac = mac.strip().upper()
         dual_cfg = None

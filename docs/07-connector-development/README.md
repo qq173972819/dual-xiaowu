@@ -33,7 +33,7 @@
     "authorize_url": "https://third-party/oauth/authorize",
     "token_url": "https://third-party/oauth/token",
     "client_id": "xxx",
-    "client_secret_env": "XIAOWU_SOME_SERVICE_SECRET",
+    "client_secret_env": "INKSIGHT_SOME_SERVICE_SECRET",
     "scopes": ["read"]
   },
   "guide": ["第一步…", "第二步…"],
@@ -59,7 +59,7 @@ connector_auth_states(state, user_id, connector_id, created_at, expires_at)  -- 
 
 ## 凭据保险库（connectors.py）
 
-- `CredentialVault`：Fernet 对称加密（SHA-256 派生密钥的单层信封加密）。主密钥来自环境变量 `XIAOWU_CONNECTOR_MASTER_KEY`；开发模式缺省从 `admin_key` 派生，**生产必须显式设置**。
+- `CredentialVault`：Fernet 对称加密（SHA-256 派生密钥的单层信封加密）。主密钥来自环境变量 `INKSIGHT_CONNECTOR_MASTER_KEY`；开发模式缺省从 `admin_key` 派生，**生产必须显式设置**。
 - 加密的是第三方 token 响应的完整 JSON；解密只在服务端运行时发生，任何 API 不回传明文。
 - 轮换主密钥 = 全量重加密脚本（待补）；解密失败会明确报"主密钥不一致"。
 

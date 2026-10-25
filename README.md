@@ -32,7 +32,7 @@
 ```bash
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn xiaowu_platform.main:app --reload --port 8104
+.\.venv\Scripts\python.exe -m uvicorn INKSIGHT_platform.main:app --reload --port 8104
 ```
 
 以上命令不依赖系统 PATH 中存在 `pip` 或 `uvicorn`。如果 PowerShell 允许激活脚本，也可以先执行 `.\.venv\Scripts\Activate.ps1`，之后再使用 `python -m pip` 和 `python -m uvicorn`。
@@ -40,7 +40,7 @@ python -m venv .venv
 启动后：
 - 接口文档（Swagger）：`http://127.0.0.1:8104/docs`
 - 健康检查：`GET http://127.0.0.1:8104/health`
-- 管理员账号通过环境变量 `XIAOWU_ADMIN_USERNAME` 和 `XIAOWU_ADMIN_PASSWORD` 配置；请在本机设置，不要提交真实凭据。
+- 管理员账号通过环境变量 `INKSIGHT_ADMIN_USERNAME` 和 `INKSIGHT_ADMIN_PASSWORD` 配置；请在本机设置，不要提交真实凭据。
 
 另开终端运行模拟器：
 
@@ -48,14 +48,14 @@ python -m venv .venv
 python tools/s3_simulator.py --server http://127.0.0.1:8104
 ```
 
-模拟器首次启动会在开发模式自动注册，随后轮询任务。打开 `http://127.0.0.1:8104/docs` 可调用 OpenAPI；管理员登录账号由环境变量提供。生产环境必须设置 `XIAOWU_DEV_MODE=false` 并配置专用管理员账号、密码及管理密钥。
+模拟器首次启动会在开发模式自动注册，随后轮询任务。打开 `http://127.0.0.1:8104/docs` 可调用 OpenAPI；管理员登录账号由环境变量提供。生产环境必须设置 `INKSIGHT_DEV_MODE=false` 并配置专用管理员账号、密码及管理密钥。
 
 PowerShell 本地启动管理员示例（密码仅存在于当前终端会话）：
 
 ```powershell
-$env:XIAOWU_ADMIN_USERNAME = "your-admin-name"
-$env:XIAOWU_ADMIN_PASSWORD = Read-Host "管理员密码" -AsSecureString | ConvertFrom-SecureString -AsPlainText
-python -m uvicorn xiaowu_platform.main:app --reload --port 8104
+$env:INKSIGHT_ADMIN_USERNAME = "your-admin-name"
+$env:INKSIGHT_ADMIN_PASSWORD = Read-Host "管理员密码" -AsSecureString | ConvertFrom-SecureString -AsPlainText
+python -m uvicorn INKSIGHT_platform.main:app --reload --port 8104
 ```
 
 > **端口说明**：本平台后端统一运行在 **8104**。`apps/content-console-cn`（PC 内容后台）通过环境变量 `INKSIGHT_BACKEND_API_BASE` 默认指向 `http://127.0.0.1:8104`；`services/legacy-api` 为旧的兼容后端，已在本次整合中让出 8104，请勿同时占用。

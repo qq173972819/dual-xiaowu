@@ -6,7 +6,7 @@ typedef enum {
     XIAOWU_SCREEN_A = 0,
     XIAOWU_SCREEN_B = 1,
     XIAOWU_SCREEN_BOTH = 2,
-} xiaowu_screen_t;
+} XIAOWU_screen_t;
 
 typedef struct {
     const char* device_id;
@@ -16,4 +16,4 @@ typedef struct {
     uint8_t has_audio_input;
     uint8_t has_audio_output;
     uint8_t has_storage;
-} xiaowu_device_capabilities_t;
+} XIAOWU_device_capabilities_t;

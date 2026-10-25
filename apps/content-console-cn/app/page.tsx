@@ -772,6 +772,7 @@ const SCENE_MODES: Record<SceneKey, { a: { key: string; label: string }[]; b: { 
   finance: {
     a: [
       { key: "finance-watch", label: "自选股行情" },
+      { key: "finance-market", label: "大盘全景" },
       { key: "finance-reco", label: "推荐股" },
       { key: "finance-portfolio", label: "资金管理看板" },
       { key: "finance-gold", label: "黄金/期货" },
@@ -779,6 +780,7 @@ const SCENE_MODES: Record<SceneKey, { a: { key: string; label: string }[]; b: { 
     ],
     b: [
       { key: "finance-trend", label: "行情趋势（日K）" },
+      { key: "finance-sectors", label: "板块动向" },
       { key: "finance-watch", label: "自选股行情" },
       { key: "finance-gold", label: "黄金/期货" },
     ],
@@ -929,8 +931,11 @@ function FinanceModePreview({ kind, mode }: { kind: "a" | "b"; mode: string }) {
   const [err, setErr] = useState("");
   const rotate = mode === "finance-trend" && kind === "b" && watch.length > 1;
   const cur = watch[Math.min(klineIdx, Math.max(0, watch.length - 1))];
+  // 新增大盘全景(A) / 板块动向(B)：直接渲染后端真实墨水屏画面，所见即所得
+  const isLiveRender = (kind === "a" && mode === "finance-market") || (kind === "b" && mode === "finance-sectors");
 
   useEffect(() => {
+    if (isLiveRender) return; // 这两种模式由后端实时出图，无需前端拉取列表
     let alive = true;
     (async () => {
       try {
@@ -967,6 +972,13 @@ function FinanceModePreview({ kind, mode }: { kind: "a" | "b"; mode: string }) {
     return () => clearInterval(t);
   }, [rotate, autoPlay, watch.length]);
 
+  // 大盘全景(A) / 板块动向(B)：展示后端实时渲染的墨水屏画面（与设备一致）
+  if (kind === "a" && mode === "finance-market") {
+    return <div className="kline-full"><img className="kline-full-img" alt="大盘全景" src={`/api/preview?persona=DUAL_A&w=400&h=300&sceneKey=finance&aMode=finance-market`} /></div>;
+  }
+  if (kind === "b" && mode === "finance-sectors") {
+    return <div className="kline-full"><img className="kline-full-img" alt="板块动向" src={`/api/preview?persona=DUAL_B&w=400&h=300&colors=4&sceneKey=finance&bMode=finance-sectors`} /></div>;
+  }
   if (err) return <div className="eink-screen"><div className="eink-title"><b>实时行情</b></div><div className="eink-list">{[0, 1, 2].map((i) => <div key={i}><span>○ 暂无数据</span></div>)}</div><small className="eink-sub">{err}</small></div>;
   if (kind === "b" && rotate) return (
     <div className="kline-full" onClick={() => { setAutoPlay(false); setKlineIdx((i) => (i + 1) % watch.length); }} title="点击切换下一只自选股">

@@ -9,16 +9,16 @@
 先启动本工程后端（终端 1，仓库根目录）：
 
 ```powershell
-cd E:\electron\screen\inksight-main\inksight-main\xiaowu-s3-open-platform
+cd E:\electron\screen\XiaoWu-main\XiaoWu-main\xiaowu-s3-open-platform
 .\run_backend.bat
 # 等价命令（注意必须 0.0.0.0，127.0.0.1:8104 在本机被占用会绑不上）：
-# .\.venv\Scripts\python.exe -m uvicorn xiaowu_platform.main:app --host 0.0.0.0 --port 8104 --reload
+# .\.venv\Scripts\python.exe -m uvicorn INKSIGHT_platform.main:app --host 0.0.0.0 --port 8104 --reload
 ```
 
 再启动本控制台（终端 2）：
 
 ```powershell
-cd E:\electron\screen\inksight-main\inksight-main\xiaowu-s3-open-platform\apps\content-console-cn
+cd E:\electron\screen\XiaoWu-main\XiaoWu-main\xiaowu-s3-open-platform\apps\content-console-cn
 npm run dev
 ```
 
@@ -42,4 +42,4 @@ npm run dev
 
 ## 后续接口
 
-场景配置目前保存在浏览器 `xiaowu_dual_config` 草稿中。正式设备同步需要后端增加双屏配置表和按 `screen=A|B` 区分的渲染、刷新状态接口。
+场景配置目前保存在浏览器 `INKSIGHT_dual_config` 草稿中。正式设备同步需要后端增加双屏配置表和按 `screen=A|B` 区分的渲染、刷新状态接口。

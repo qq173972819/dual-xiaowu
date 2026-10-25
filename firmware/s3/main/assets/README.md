@@ -21,12 +21,12 @@ DIN(GPIO6)/CLK(GPIO8)/DC(GPIO10)/RST(GPIO11), with independent CS/BUSY:
 | Socket | Role | Panel | CS | BUSY |
 | --- | --- | --- | --- | --- |
 | FPC1 | 对话信息屏 + 学习 dashboard（快刷） | SSD1619 4.2" 黑白 1bpp | GPIO39 | GPIO40 |
-| FPC2 | InkSight 模式画面（服务端渲染） | UC1679 4.2" 黑白红三色 2bpp | GPIO9 | GPIO12 |
+| FPC2 | XiaoWu 模式画面（服务端渲染） | UC1679 4.2" 黑白红三色 2bpp | GPIO9 | GPIO12 |
 
 - `Ssd1619Display`（FPC1）remains the `GetDisplay()` panel: voice
   conversation transcript, home menu, words trainer, quota page. Its
   2-phase partial LUT provides the fast-refresh behavior.
-- `Uc1679Display`（FPC2，`uc1679_display.cc`）renders InkSight mode
+- `Uc1679Display`（FPC2，`uc1679_display.cc`）renders XiaoWu mode
   frames. `InkSightClient::Load2bpp` requests
   `/api/render?bpp=2&colors=4` and splits the 30000-byte raw 2bpp stream
   (0=black 1=white 2=yellow 3=red) into B/W and RED planes; yellow pixels
@@ -36,10 +36,10 @@ DIN(GPIO6)/CLK(GPIO8)/DC(GPIO10)/RST(GPIO11), with independent CS/BUSY:
   panel refreshes (`Uc1679Display::IsRefreshing`), SSD1619 hardware resets
   wait; the color driver likewise waits for SSD1619 BUSY before resetting.
 - Startup probe: if the FPC2 socket is empty, `Init()` fails and the
-  firmware degrades to the legacy single-screen behavior (InkSight frames
+  firmware degrades to the legacy single-screen behavior (XiaoWu frames
   rendered as 1-bit BMP on the SSD1619).
 - Auto refresh: `ColorRefreshTask` refreshes the color screen every
-  `color_refresh_minutes` (NVS `inksight`, default 30; 0 disables).
+  `color_refresh_minutes` (NVS `XiaoWu`, default 30; 0 disables).
 - Build switch: `EPD_ENABLE_COLOR_SCREEN=0` compiles the color screen out.
 - New MCP tools: `self.epaper.refresh_color_screen`,
   `self.epaper.set_color_refresh_minutes`, `self.epaper.screen_status`.

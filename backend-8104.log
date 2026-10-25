@@ -1,10 +1,10 @@
-INFO:     Will watch for changes in these directories: ['E:\\electron\\screen\\inksight-main\\inksight-main\\xiaowu-s3-open-platform']
+INFO:     Will watch for changes in these directories: ['E:\\electron\\screen\\XiaoWu-main\\XiaoWu-main\\xiaowu-s3-open-platform']
 INFO:     Uvicorn running on http://0.0.0.0:8104 (Press CTRL+C to quit)
 INFO:     Started reloader process [31876] using WatchFiles
 INFO:     Started server process [30316]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-WARNING:  WatchFiles detected changes in 'xiaowu_platform\main.py'. Reloading...
+WARNING:  WatchFiles detected changes in 'INKSIGHT_platform\main.py'. Reloading...
  INFO:     127.0.0.1:52797 - "POST /api/device/TEST/dual-config HTTP/1.1" 401 Unauthorized
 WARNING:  Invalid HTTP request received.
 INFO:     127.0.0.1:65010 - "GET /api/finance/watchlist HTTP/1.1" 401 Unauthorized

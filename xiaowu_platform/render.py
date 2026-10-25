@@ -809,7 +809,7 @@ def _render_dual_screen_inner(mac: str, screen: str, w: int, h: int, colors: int
                         footer = "家庭共享提醒"
                 return render_scene_modules("家庭提醒" if mode == "family" else (a_cfg.get("title") or "家庭提醒"), rows, w, h, colors, footer)
             # 理财场景：A 屏自选行情 / 市场摘要（实时拉取东财公开接口，失败回落通用看板）
-            if scene_key == "finance" and mode in ("finance-watch", "finance-summary"):
+            if scene_key == "finance" and mode in ("finance-watch", "finance-summary", "finance-market"):
                 try:
                     from . import finance as _finance
                     return _finance.render_a_screen(a_cfg, cfg_root, w, h, mac=mac)
@@ -854,7 +854,7 @@ def _render_dual_screen_inner(mac: str, screen: str, w: int, h: int, colors: int
                 rows = rows[:3] + [str(x) for x in (b_cfg.get("modules") or []) if str(x).strip()][:3]
             return render_scene_modules("家庭共享看板" if b_mode == "family" else "家庭日程", rows or ["暂无家庭日程"], w, h, colors, f"共 {len(events)} 项安排")
         # 理财场景：B 屏行情趋势 → 首只自选的日 K 蜡烛图（失败回落通用看板）
-        if scene_key == "finance" and b_mode in ("finance-trend", "finance-kline"):
+        if scene_key == "finance" and b_mode in ("finance-trend", "finance-kline", "finance-sectors"):
             try:
                 from . import finance as _finance
                 return _finance.render_b_screen(b_cfg, cfg_root, w, h, colors, mac=mac)

@@ -17,9 +17,11 @@ from __future__ import annotations
 import json
 import logging
 import re
+import ssl
 import time
 import urllib.parse
 import urllib.request
+import zlib
 from datetime import datetime
 from typing import Any, Optional
 
@@ -41,6 +43,7 @@ _RETRIES = 2
 _CACHE_TTL = 60.0
 _MAX_CACHE = 256
 _cache: dict[str, tuple[float, Any]] = {}
+_SECTOR_SINA_CACHE: Optional[tuple[float, list[dict]]] = None
 
 # 直连 opener：绕过 http_proxy/https_proxy 等环境代理，
 # 避免本机代理（Clash 等）劫持或断连公开行情接口。
@@ -368,8 +371,11 @@ def render_kline_image(kline: dict[str, Any], w: int, h: int, colors: int) -> Im
 # ── 渲染入口（由 render_dual_screen 的理财分支调用） ───────────
 def render_a_screen(a_cfg: dict[str, Any], dual_config: Optional[dict], w: int, h: int,
                     mac: str = "") -> Image.Image:
-    """A 屏理财模式：finance-watch 自选行情 / finance-summary 市场摘要。"""
+    """A 屏理财模式：finance-market 大盘全景 / finance-summary 市场摘要 / finance-watch 自选行情。"""
     mode = str(a_cfg.get("mode") or "finance-watch")
+    if mode == "finance-market":
+        groups = fetch_market_indices()
+        return render_market_board(groups, w, h)
     watchlist = _effective_watchlist(mac, dual_config)
     if mode == "finance-summary":
         quotes = fetch_quotes(INDEX_SUMMARY_CODES)
@@ -380,7 +386,12 @@ def render_a_screen(a_cfg: dict[str, Any], dual_config: Optional[dict], w: int, 
 
 def render_b_screen(b_cfg: dict[str, Any], dual_config: Optional[dict], w: int, h: int, colors: int,
                     mac: str = "") -> Image.Image:
-    """B 屏理财模式：finance-trend / finance-kline → A 屏自选首只的日 K。"""
+    """B 屏理财模式：finance-sectors 板块动向 / finance-trend|finance-kline → A 屏自选首只日 K。"""
+    mode = str(b_cfg.get("mode") or "finance-trend")
+    if mode == "finance-sectors":
+        sectors = fetch_sectors()
+        commodities = fetch_commodities()
+        return render_sectors(sectors, commodities, w, h, colors)
     watchlist = _effective_watchlist(mac, dual_config)
     code = str(b_cfg.get("klineCode") or "").strip()
     if not code:
@@ -625,3 +636,414 @@ def fetch_gold_futures() -> list[dict[str, Any]]:
     return [rows.get(secid.split(".")[-1]) or {"code": secid.split(".")[-1], "name": name,
                                                "price": None, "pct": None, "chg": None, "market": 0}
             for secid, name in GOLD_FUTURES_SECIDS]
+
+
+# ── 多市场大盘指数 / 商品（参考东方财富行情中心，适配墨水屏）────────
+# A 股指数走腾讯公开接口（fetch_quotes，已验证）；港股/美股/日经/商品/板块走东财公开接口。
+# secid 规则：A 股 sh/sz + 6 位；港股/美股/日经 100.xxx；期货/商品 113/101/115.xxx。
+# 取不到行情的行显示占位（--），不阻断整屏渲染；secid 以实测为准，失败可在本表修正。
+#
+# 腾讯备源：东财公开接口对海外/商品指数偶发限流（RemoteDisconnected），而腾讯 qt.gtimg.cn
+# 对港股(hk)、美股(us)、外盘期货(hf) 同样覆盖，且更稳定。故海外指数与商品默认「腾讯主源 +
+# 东财兜底」，沪金/沪银(113) 与日经(100.N225) 无腾讯等价则仅走东财。
+SECID_TO_TENCENT: dict[str, Optional[str]] = {
+    "100.HSI": "hkHSI",
+    "100.HSTECH": "hkHSTECH",
+    "100.DJIA": "usDJI",
+    "100.SPX": "usINX",
+    "100.IXIC": "usIXIC",
+    "101.GC00Y": "hf_GC",
+    "101.SI00Y": "hf_SI",
+    "101.CL00Y": "hf_CL",
+    "101.OIL": "hf_OIL",
+    # 以下无腾讯等价，仅走东财：沪金/沪银、日经
+}
+
+
+def _tencent_index(code: str) -> dict[str, Any]:
+    """腾讯港股/美股指数（hkHSI / usDJI 等）。字段同 A 股：~ 分隔，[1]名称 [3]价 [31]涨跌额 [32]涨跌幅%。"""
+    url = _QQ_QUOTE_URL + code
+    try:
+        req = urllib.request.Request(url, headers=_HEADERS)
+        with _opener.open(req, timeout=_TIMEOUT) as resp:
+            text = resp.read().decode("gbk", errors="replace")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[FINANCE] tencent index failed %s: %s", code, exc)
+        return {}
+    m = re.search(r'v_%s="([^"]*)"' % re.escape(code), text)
+    if not m:
+        return {}
+    parts = m.group(1).split("~")
+    if len(parts) < 33:
+        return {}
+    return {
+        "code": code,
+        "name": parts[1],
+        "price": _num(float(parts[3])) if parts[3] else None,
+        "chg": _num(float(parts[31])) if parts[31] else None,
+        "pct": _num(float(parts[32])) if parts[32] else None,
+    }
+
+
+def _tencent_future(code: str) -> dict[str, Any]:
+    """腾讯外盘期货（hf_GC / hf_CL / hf_OIL / hf_SI）。逗号分隔：[0]最新价 [1]涨跌幅%。"""
+    url = _QQ_QUOTE_URL + code
+    try:
+        req = urllib.request.Request(url, headers=_HEADERS)
+        with _opener.open(req, timeout=_TIMEOUT) as resp:
+            text = resp.read().decode("gbk", errors="replace")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[FINANCE] tencent future failed %s: %s", code, exc)
+        return {}
+    m = re.search(r'v_%s="([^"]*)"' % re.escape(code), text)
+    if not m:
+        return {}
+    parts = m.group(1).split(",")
+    if len(parts) < 2:
+        return {}
+    return {
+        "code": code,
+        "name": parts[-1] if len(parts) > 12 else code,
+        "price": _num(float(parts[0])) if parts[0] else None,
+        "pct": _num(float(parts[1])) if parts[1] else None,
+        "chg": None,
+    }
+
+
+def _fetch_with_tencent_fallback(secid: str, name: str,
+                                 tcode: Optional[str]) -> dict[str, Any]:
+    """单标的：腾讯主源，失败或缺失回落东财。显示名强制用配置名（屏蔽腾讯原始名）。"""
+    q: dict[str, Any] = {}
+    if tcode:
+        q = _tencent_future(tcode) if tcode.startswith("hf") else _tencent_index(tcode)
+        if not q.get("price"):
+            q = {}
+    if not q.get("price"):
+        eq = fetch_secid_quotes([secid], {secid: name})
+        q = eq.get(secid) or {"code": secid, "name": name,
+                              "price": None, "pct": None, "chg": None}
+    q["name"] = name
+    q.setdefault("code", secid)
+    q.setdefault("pct", None)
+    q.setdefault("price", None)
+    return q
+
+
+MARKET_INDEX_GROUPS = [
+    ("A股", ["sh000001", "sz399001", "sz399006", "sh000300", "sh000016"],
+            ["上证指数", "深证成指", "创业板指", "沪深300", "上证50"]),
+    ("港股", ["100.HSI", "100.HSTECH"], ["恒生指数", "恒生科技"]),
+    ("美股", ["100.DJIA", "100.SPX", "100.IXIC"], ["道琼斯", "标普500", "纳斯达克"]),
+    ("亚太", ["100.N225"], ["日经225"]),
+]
+
+COMMODITY_GROUPS = [
+    ("贵金属", ["113.aum", "113.agm", "101.GC00Y", "101.SI00Y"],
+              ["沪金", "沪银", "COMEX金", "COMEX银"]),
+    ("石油", ["101.CL00Y", "101.OIL"], ["WTI原油", "布伦特原油"]),
+]
+
+
+def fetch_secid_quotes(secids: list[str], names: Optional[dict] = None) -> dict[str, dict]:
+    """东财 ulist.np：按原始 secid 批量取实时快照，返回 {secid: quote}。"""
+    if not secids:
+        return {}
+    url = (f"{_EM_QUOTE_URL}?fltt=2&invt=2&fields=f2,f3,f4,f12,f13,f14"
+           f"&secids={','.join(secids)}")
+    try:
+        data = _get_json(url)
+    except Exception:  # noqa: BLE001
+        logger.warning("[FINANCE] secid quote failed secids=%s", secids)
+        return {}
+    diff = ((data or {}).get("data") or {}).get("diff") or []
+    if isinstance(diff, dict):
+        diff = list(diff.values())
+    out: dict[str, dict] = {}
+    for row in diff:
+        mkt = row.get("f13")
+        code = str(row.get("f12") or "")
+        full = str(row.get("secid") or "")
+        if not full and code:
+            full = f"{mkt}.{code}" if mkt is not None else code
+        if not full:
+            continue
+        out[full] = {
+            "code": full,
+            "name": ((names or {}).get(full) or str(row.get("f14") or "")),
+            "price": _num(row.get("f2")),
+            "pct": _num(row.get("f3")),
+            "chg": _num(row.get("f4")),
+            "market": int(mkt or 0),
+        }
+    return out
+
+
+def fetch_market_indices() -> list[tuple[str, list[dict]]]:
+    """分组返回多市场指数快照：[(分组名, [quote...]), ...]，quote 与 fetch_quotes 同构。"""
+    result: list[tuple[str, list[dict]]] = []
+    for grp, codes, names in MARKET_INDEX_GROUPS:
+        name_map = dict(zip(codes, names))
+        if grp == "A股":
+            quotes = fetch_quotes(codes)  # 腾讯接口，已验证
+            for q, nm in zip(quotes, names):
+                q.setdefault("name", nm)
+        else:
+            quotes = []
+            for sid, nm in zip(codes, names):
+                quotes.append(_fetch_with_tencent_fallback(sid, nm, SECID_TO_TENCENT.get(sid)))
+        result.append((grp, quotes))
+    return result
+
+
+def fetch_commodities() -> list[tuple[str, list[dict]]]:
+    """分组返回贵金属/商品快照：[(分组名, [quote...]), ...]。腾讯主源 + 东财兜底。"""
+    result: list[tuple[str, list[dict]]] = []
+    for grp, codes, names in COMMODITY_GROUPS:
+        quotes = []
+        for sid, nm in zip(codes, names):
+            quotes.append(_fetch_with_tencent_fallback(sid, nm, SECID_TO_TENCENT.get(sid)))
+        result.append((grp, quotes))
+    return result
+
+
+def _fetch_sector_list(fs: str, limit: int = 8) -> list[dict]:
+    """东财板块列表（行业 m:90+t:2 / 概念 m:90+t:3），返回按涨跌幅降序的前 N。f3 为百分比×100。"""
+    url = (f"https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz={limit}"
+           f"&fs={urllib.parse.quote(fs)}&fields=f12,f14,f3,f128,f140,f141")
+    try:
+        data = _get_json(url)
+    except Exception:  # noqa: BLE001
+        logger.warning("[FINANCE] sector list failed fs=%s", fs, exc_info=True)
+        return []
+    diff = ((data or {}).get("data") or {}).get("diff") or []
+    if isinstance(diff, dict):
+        diff = list(diff.values())
+    rows = []
+    for row in diff:
+        pct_raw = _num(row.get("f3"))
+        rows.append({
+            "code": str(row.get("f12") or ""),
+            "name": str(row.get("f14") or ""),
+            "pct": (pct_raw / 100.0) if isinstance(pct_raw, float) else 0.0,
+            "leader": str(row.get("f128") or ""),
+        })
+    rows.sort(key=lambda r: r["pct"], reverse=True)
+    return rows[:limit]
+
+
+def _parse_sina_bankuai(text: str) -> list[dict]:
+    """解析新浪行业板块变量：每条「板块代码,名称,股票数,均价,涨跌额,涨跌幅%,...」，字段 5 即涨跌幅(%)。"""
+    rows: list[dict] = []
+    m = re.search(r"var S_Finance_bankuai_sinaindustry\s*=\s*\{(.*)\}\s*$", text, re.S)
+    if not m:
+        return rows
+    for entry in re.finditer(r'"([^"]+)":"([^"]*)"', m.group(1)):
+        vals = entry.group(2).split(",")
+        if len(vals) < 6:
+            continue
+        try:
+            pct = float(vals[5])
+        except ValueError:
+            continue
+        rows.append({"name": vals[1], "pct": pct, "leader": vals[-1] if len(vals) > 12 else ""})
+    rows.sort(key=lambda r: r["pct"], reverse=True)
+    return rows
+
+
+def _fetch_sector_list_sina() -> list[dict]:
+    """新浪行业板块快照（newSinaHy.php）：name + 涨跌幅%。
+
+    新浪接口稳定可达、无需鉴权，作为行业板块主源，彻底摆脱对东方财富的限流依赖。
+    """
+    global _SECTOR_SINA_CACHE
+    now = time.time()
+    if _SECTOR_SINA_CACHE and now - _SECTOR_SINA_CACHE[0] < _CACHE_TTL:
+        return _SECTOR_SINA_CACHE[1]
+    rows: list[dict] = []
+    url = "https://money.finance.sina.com.cn/q/view/newSinaHy.php"
+    req = urllib.request.Request(
+        url,
+        headers={**_HEADERS, "Referer": "https://finance.sina.com.cn/"},
+    )
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    last_exc: Optional[Exception] = None
+    text = ""
+    for _ in range(3):
+        try:
+            # 先经系统代理/直连（新浪对无代理直连偶发 reset，走默认 opener 更稳）；
+            # 失败再试绕过代理的直连（生产环境避免 Clash 劫持）。
+            try:
+                with urllib.request.urlopen(req, timeout=12, context=ssl_ctx) as resp:
+                    raw = resp.read()
+            except Exception:  # noqa: BLE001
+                with _opener.open(req, timeout=_TIMEOUT) as resp:
+                    raw = resp.read()
+            enc = resp.headers.get("Content-Encoding", "")
+            if "gzip" in enc:
+                raw = zlib.decompress(raw, 16 + zlib.MAX_WBITS)
+            text = raw.decode("gbk", errors="replace")
+            rows = _parse_sina_bankuai(text)
+            if rows:
+                break
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            time.sleep(0.8)
+    if not rows:
+        logger.warning("[FINANCE] sina bankuai failed: %s", last_exc)
+        return []
+    m = re.search(r"var S_Finance_bankuai_sinaindustry\s*=\s*\{(.*)\}\s*$", text, re.S)
+    if not m:
+        return []
+    for entry in re.finditer(r'"([^"]+)":"([^"]*)"', m.group(1)):
+        vals = entry.group(2).split(",")
+        if len(vals) < 6:
+            continue
+        try:
+            pct = float(vals[5])
+        except ValueError:
+            continue
+        rows.append({"name": vals[1], "pct": pct, "leader": vals[-1] if len(vals) > 12 else ""})
+    rows.sort(key=lambda r: r["pct"], reverse=True)
+    _SECTOR_SINA_CACHE = (now, rows)
+    return rows
+
+
+def fetch_sectors() -> dict[str, list[dict]]:
+    """板块动向：行业板块（新浪主源 + 东财兜底）/ 概念板块（东财，生产可用）。"""
+    industry = _fetch_sector_list_sina()
+    if not industry:
+        industry = _fetch_sector_list("m:90+t:2")  # 新浪不可达时回落东财
+    concept = _fetch_sector_list("m:90+t:3")  # 概念板块东财有、新浪无等价公开源
+    return {"industry": industry[:8], "concept": concept[:8]}
+
+
+# ── A 屏：大盘全景（1-bit 黑白，2 列网格） ───────────────────
+def render_market_board(groups: list, w: int, h: int, title: str = "大盘全景") -> Image.Image:
+    """A 屏（1-bit 黑白）：多市场指数总览。2 列网格，▲/▼ + 数值区分涨跌（A 屏无彩色）。"""
+    img = Image.new("1", (w, h), 1)
+    draw = ImageDraw.Draw(img)
+    s = w / 400.0
+    pad = int(10 * s)
+    f_title = _cjk(max(14, int(18 * s)))
+    f_meta = _cjk(max(9, int(11 * s)))
+    f_name = _cjk(max(10, int(12 * s)))
+    f_val = _cjk(max(10, int(12 * s)))
+
+    today = datetime.now().strftime("%m-%d %H:%M")
+    draw.text((pad, int(8 * s)), title, fill=0, font=f_title)
+    tw = draw.textlength(today, font=f_meta)
+    draw.text((w - pad - tw, int(12 * s)), today, fill=0, font=f_meta)
+    draw.line([(pad, int(34 * s)), (w - pad, int(34 * s))], fill=0, width=max(1, int(s)))
+
+    items = [(g, q) for g, rows in groups for q in rows]
+    cols = 2
+    rows_n = max(1, (len(items) + cols - 1) // cols)
+    top = int(40 * s)
+    bottom = h - int(26 * s)  # 抬高底部，给页脚留出充足间距，避免末行拥挤
+    row_h = (bottom - top) / rows_n
+    col_w = (w - 2 * pad) / cols
+    for idx, (g, q) in enumerate(items):
+        r = idx // cols
+        c = idx % cols
+        x = pad + c * col_w
+        y = top + r * row_h
+        cy = y + row_h / 2
+        name = str(q.get("name") or q.get("code") or "--")
+        draw.text((x, cy - row_h * 0.42), name, fill=0, font=f_name)
+        price = _fmt(q.get("price"))
+        pct = _pct_text(q.get("pct"))
+        draw.text((x, cy + int(2 * s)), f"{price}  {pct}", fill=0, font=f_val)
+    # 列分隔线（仅当双列且行数 > 1）；自页眉线起向下贯通，框出网格
+    if rows_n > 1:
+        draw.line([(pad + col_w, int(34 * s)), (pad + col_w, bottom)], fill=0, width=1)
+    foot = "行情快照 · 多源聚合（原型）"
+    fw = draw.textlength(foot, font=f_meta)
+    draw.text((w - pad - fw, h - int(12 * s)), foot, fill=0, font=f_meta)
+    return img
+
+
+# ── B 屏：板块动向 + 贵金属/石油（BWRY 四色，红涨黑跌） ─────────
+def render_sectors(sectors: dict, commodities: list, w: int, h: int, colors: int) -> Image.Image:
+    """B 屏（BWRY 四色）：板块动向（行业/概念涨幅条 红涨黑跌）+ 贵金属/石油小卡。"""
+    is_color = colors >= 3
+    img = _palette(w, h, colors) if is_color else Image.new("1", (w, h), 1)
+    draw = ImageDraw.Draw(img)
+    s = w / 400.0
+    pad = int(10 * s)
+    f_title = _load_cjk_bold(max(14, int(17 * s)))
+    f_meta = _cjk(max(9, int(10 * s)))
+    f_sec = _cjk(max(10, int(12 * s)))
+    f_bar = _cjk(max(9, int(11 * s)))
+    fg = 0
+    red = 3 if is_color else 0
+
+    today = datetime.now().strftime("%m-%d %H:%M")
+    draw.text((pad, int(8 * s)), "板块动向", fill=fg, font=f_title)
+    tw = draw.textlength(today, font=f_meta)
+    draw.text((w - pad - tw, int(12 * s)), today, fill=fg, font=f_meta)
+    draw.line([(pad, int(34 * s)), (w - pad, int(34 * s))], fill=fg, width=max(1, int(s)))
+
+    y = int(42 * s)
+    draw.text((pad, y), "行业板块", fill=fg, font=f_sec)
+    y += int(18 * s)
+    y = _draw_sector_rows(draw, (sectors.get("industry") or [])[:4], pad, y, w, s, f_bar, red, fg)
+    y += int(3 * s)
+    draw.text((pad, y), "概念板块", fill=fg, font=f_sec)
+    y += int(18 * s)
+    y = _draw_sector_rows(draw, (sectors.get("concept") or [])[:3], pad, y, w, s, f_bar, red, fg)
+    y += int(3 * s)
+    draw.text((pad, y), "贵金属 · 石油", fill=fg, font=f_sec)
+    y += int(16 * s)
+    _draw_commodity_strip(draw, commodities, pad, y, w, s, f_bar, red, fg)
+    foot = "板块/商品 · 多源聚合（原型）"
+    fw = draw.textlength(foot, font=f_meta)
+    draw.text((w - pad - fw, h - int(11 * s)), foot, fill=fg, font=f_meta)
+    return img
+
+
+def _draw_sector_rows(draw, rows, pad, y, w, s, font, red, fg):
+    if not rows:
+        draw.text((pad + int(6 * s), y), "板块数据同步中…", fill=fg, font=font)
+        return y + int(20 * s)
+    bar_x = pad + int(64 * s)
+    bar_max = (w - pad) - bar_x - int(46 * s)
+    mid_x = bar_x + bar_max // 2
+    row_h = int(20 * s)
+    for r in rows:
+        name = str(r.get("name") or "")[:6]
+        pct = r.get("pct") or 0.0
+        col = red if pct >= 0 else 0
+        draw.text((pad, y), name, fill=fg, font=font)
+        mid = y + row_h // 2
+        draw.line([(bar_x, mid), (bar_x + bar_max, mid)], fill=fg, width=1)
+        extent = max(-1.0, min(1.0, pct / 5.0)) * (bar_max / 2)
+        if extent >= 0:
+            draw.rectangle([mid_x, mid - int(2 * s), int(mid_x + extent), mid + int(2 * s)], fill=col)
+        else:
+            draw.rectangle([int(mid_x + extent), mid - int(2 * s), mid_x, mid + int(2 * s)], fill=col)
+        arrow = "▲" if pct >= 0 else "▼"
+        draw.text((bar_x + bar_max + int(4 * s), y), f"{arrow}{abs(pct):.2f}%", fill=col, font=font)
+        y += row_h
+    return y + int(2 * s)
+
+
+def _draw_commodity_strip(draw, commodities, pad, y, w, s, font, red, fg):
+    items = []
+    for g, rows in commodities:
+        for q in rows:
+            items.append((g, q))
+    if not items:
+        draw.text((pad + int(6 * s), y), "暂无商品数据", fill=fg, font=font)
+        return
+    n = len(items)
+    cell_w = (w - 2 * pad) / n
+    for i, (g, q) in enumerate(items):
+        x = pad + i * cell_w
+        name = str(q.get("name") or q.get("code") or "--")
+        pct = q.get("pct")
+        col = red if (pct or 0) >= 0 else 0
+        draw.text((x, y), name, fill=fg, font=font)
+        draw.text((x, y + int(12 * s)), _fmt(q.get("price")), fill=fg, font=font)
+        draw.text((x, y + int(24 * s)), _pct_text(pct), fill=col, font=font)

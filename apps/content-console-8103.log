@@ -12,7 +12,7 @@
 
 - Local:        http://localhost:8094
 - PID:          28796
-- Dir:          E:\electron\screen\inksight-main\inksight-main\xiaowu-s3-open-platform\apps\content-console-cn
+- Dir:          E:\electron\screen\XiaoWu-main\XiaoWu-main\xiaowu-s3-open-platform\apps\content-console-cn
 - Log:          .next\dev\logs\next-development.log
 
 You can access the existing server at http://localhost:8094,

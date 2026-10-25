@@ -6,7 +6,7 @@
 const mock = require('./mock.js');
 
 // 本地模拟时的 dual_config 落盘 key
-const MOCK_CFG_KEY = 'xiaowu_dual_config_mock';
+const MOCK_CFG_KEY = 'INKSIGHT_dual_config_mock';
 
 function app() {
   return getApp();

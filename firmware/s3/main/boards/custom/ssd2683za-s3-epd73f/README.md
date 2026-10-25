@@ -116,11 +116,11 @@ SPI 分配：屏幕 **SPI3_HOST**，TF 卡 **SPI2_HOST**（与 epd42 板一致�
 
 | 文件 | 作用 |
 |---|---|
-| `config.h` | 引脚、阈值、InkSight / LightAcade 配置 |
+| `config.h` | 引脚、阈值、XiaoWu / LightAcade 配置 |
 | `config.json` | 板型注册与 `sdkconfig_append` |
 | `epd_7in3f_panel.h/.cc` | 七彩屏底层驱动（SPI / 初始化 / 刷帧 / 休眠） |
 | `epd73f_display.h/.cc` | LVGL 对接：RGB565 → 7 色最近邻量化 + 后台刷新任务 |
-| `inksight_client.h/.cc` | 800×480 版 InkSight 看板客户端（含独立黄色平面） |
+| `INKSIGHT_client.h/.cc` | 800×480 版 XiaoWu 看板客户端（含独立黄色平面） |
 | `ssd2683za_s3_73f_board.cc` | 板级类：音频、按键、MCP 工具、定时刷新 |
 
 复用 epd42 目录的两个与分辨率无关的模块（CMake 白名单引入，非整目录 GLOB）：
@@ -130,15 +130,15 @@ SPI 分配：屏幕 **SPI3_HOST**，TF 卡 **SPI2_HOST**（与 epd42 板一致�
 
 > 注意：epd42 目录里的 `epaper_dashboard` / `word_machine` / `ssd1619` /
 > `uc1679` 等属于双屏板专用，且 dashboard 会 include **400×300 版**
-> `inksight_client.h`，与 73f 的 800×480 版 ABI 不兼容，**不可** GLOB 进来。
+> `INKSIGHT_client.h`，与 73f 的 800×480 版 ABI 不兼容，**不可** GLOB 进来。
 
 ## 5. 画面来源与 MCP 工具
 
-- InkSight 看板：2bpp 彩色流拆成 **黑 / 黄 / 红三个平面**，七彩屏上黄色走
+- XiaoWu 看板：2bpp 彩色流拆成 **黑 / 黄 / 红三个平面**，七彩屏上黄色走
   独立平面显示真黄（不再像黑白屏那样退化成红）。
 - 默认关闭逐句聊天的 UI 刷新（`EPD73F_ENABLE_CHAT_UI = 0`）：35s 全刷不适
   合对话场景。需要聊天界面时把 `epd73f_display.h` 里的该宏改为 1。
-- MCP 工具：`self.epaper.set_inksight_server`、`set_inksight_persona`、
+- MCP 工具：`self.epaper.set_INKSIGHT_server`、`set_INKSIGHT_persona`、
   `refresh_color_screen`、`set_color_refresh_minutes`、`clear_screen`
   （7 色可选）、`show_color_bars`、`screen_status`、`self.lightacade.*`、
   `self.storage.*`、`self.audio.*`。
@@ -148,10 +148,10 @@ SPI 分配：屏幕 **SPI3_HOST**，TF 卡 **SPI2_HOST**（与 epd42 板一致�
 - `KEY+` / `KEY-`：音量 ±10
 - `KEY_OK` 短按：语音助手开/关
 - `KEY_OK` 双击：录 10 秒 WAV 到 TF 卡
-- `KEY_OK` 长按：取消正在进行的 InkSight 下载
+- `KEY_OK` 长按：取消正在进行的 XiaoWu 下载
 - `KEY-` 长按 2s：进入配网模式（先解绑，再起 AP 热点）
 - **`KEY+`（GPIO0，兼 BOOT）长按 3s：切换电源模式 活跃 ⇄ 间歇**
-  （NVS `inksight/power_mode`，键不存在＝出厂默认**活跃**）
+  （NVS `XiaoWu/power_mode`，键不存在＝出厂默认**活跃**）
 
 > 排查提示：切换是否真的生效，**不要只看网页上的「间歇状态」角标**。
 > 该角标来自后端推导，S3 固件不轮询 `/api/device/<mac>/state`，会被误判成间歇。

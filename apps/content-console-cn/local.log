@@ -15,7 +15,7 @@
  GET / 200 in 113ms (next.js: 7ms, application-code: 106ms)
  GET / 200 in 126ms (next.js: 4ms, application-code: 122ms)
  GET / 200 in 80ms (next.js: 3ms, application-code: 77ms)
-  Turbopack has seen frequent file updates and is waiting for the filesystem to settle (0.5s elapsed so far; last modified: "\\\\?\\E:\\electron\\screen\\inksight-main\\inksight-main\\xiaowu-s3-open-platform\\apps\\content-console-cn\\node_modules\\undici-types").
+  Turbopack has seen frequent file updates and is waiting for the filesystem to settle (0.5s elapsed so far; last modified: "\\\\?\\E:\\electron\\screen\\XiaoWu-main\\XiaoWu-main\\xiaowu-s3-open-platform\\apps\\content-console-cn\\node_modules\\undici-types").
  GET / 200 in 284ms (next.js: 12ms, application-code: 273ms)
  GET / 200 in 149ms (next.js: 4ms, application-code: 145ms)
  GET / 200 in 96ms (next.js: 3ms, application-code: 93ms)
