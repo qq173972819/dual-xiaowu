@@ -118,6 +118,12 @@ class ReviewSubmit(BaseModel):
     notes: str = Field(default="", max_length=1000)
 
 
+class GithubImportIn(BaseModel):
+    repo_url: str = Field(min_length=8, max_length=300)
+    branch: str = Field(default="", max_length=80)
+    entry: str = Field(default="", max_length=200)
+
+
 class ReviewDecision(BaseModel):
     decision: Literal["approve", "reject"]
     note: str = Field(default="", max_length=1000)

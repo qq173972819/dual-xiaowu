@@ -1949,7 +1949,7 @@ type ContentTab = "course" | "messages" | "notes" | "homework" | "reading" | "al
 const CONTENT_TABS_BY_SCENE: Record<SceneKey, ContentTab[]> = {
   family: ["notes", "bills", "express", "schedule", "shopping", "anniversaries", "messages", "history"],
   study: ["course", "messages", "notes", "homework", "reading", "album", "history"],
-  finance: ["watchlist", "reco", "portfolio", "gold", "notes", "history"],
+  finance: ["watchlist", "reco", "portfolio", "gold", "history"],
   health: ["notes", "messages", "history"],
   office: ["notes", "album", "messages", "history"],
   custom: ["notes", "album", "messages", "history"],
@@ -2999,10 +2999,12 @@ function DualPreview({ content, screen, sceneKey, aMode, bMode, weatherPreview, 
   const dims = screen.size === "5.83" ? "648 × 480" : "400 × 300";
   const bColor = screen.colors === 2 ? "黑白" : screen.colors === 3 ? "黑白红" : "黑白红黄";
   const mode = aMode || defaultMode(sceneKey, "a");
+  const bModeKey = bMode || defaultMode(sceneKey, "b");
+  const bModeText = (SCENE_MODES[sceneKey]?.b as { key: string; label: string }[] | undefined)?.find((m) => m.key === bModeKey)?.label || "课程表";
   const family = sceneKey === "family";
   return (
     <div className="card-pad dual-preview-card">
-      <div className="tt-grid-head"><span>双屏实时预览</span><span className="tt-hint">{family ? `A 屏${aMode === "family-weather" ? "天气" : aMode === "family" ? "家庭共享看板" : "家庭提醒"} · B 屏${bMode === "calendar" ? "家庭日程" : bMode === "family" ? "家庭共享看板" : "相册"}` : `A 屏${aModeLabel(mode)}（黑白快刷） · B 屏课程表（${bColor}）`}，编辑即时刷新</span></div>
+      <div className="tt-grid-head"><span>双屏实时预览</span><span className="tt-hint">{family ? `A 屏${aMode === "family-weather" ? "天气" : aMode === "family" ? "家庭共享看板" : "家庭提醒"} · B 屏${bMode === "calendar" ? "家庭日程" : bMode === "family" ? "家庭共享看板" : "相册"}` : `A 屏${aModeLabel(mode)}（黑白快刷） · B 屏${bModeText}（${bColor}）`}，编辑即时刷新</span></div>
       <div className="dual-preview">
         <div className="preview-card a">
           <div className="preview-meta"><span>实时预览 · A 屏</span><small>{dims}</small></div>

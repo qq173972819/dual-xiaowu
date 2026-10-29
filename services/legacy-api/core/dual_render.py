@@ -707,6 +707,24 @@ def render_family_express_bills(express: list[dict], bills: list[dict], w: int, 
     return img
 
 
+def _load_finance_renderer():
+    """Lazily import the finance renderer from the sibling xiaowu_platform package.
+
+    Returns the module, or None if unavailable. Never raises — callers fall back to
+    the generic placeholder so a missing package cannot blank the device.
+    """
+    try:
+        import sys
+        repo_root = Path(__file__).resolve().parents[3]
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+        from xiaowu_platform import finance as fin
+        return fin
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[DUAL-RENDER] finance renderer unavailable: %s", exc)
+        return None
+
+
 def render_dual_screen(mac: str, screen: str, w: int, h: int, colors: int,
                        dual_config: Optional[dict],
                        battery: Optional[int] = None) -> Image.Image:
@@ -798,6 +816,15 @@ def render_dual_screen(mac: str, screen: str, w: int, h: int, colors: int,
                         rows = [f"{x} · {len(express)} 件 / {len(bills)} 项" if x == "快递与缴费" else x for x in rows]
                         footer = "家庭共享提醒"
                 return render_scene_modules("家庭提醒" if mode == "family" else (a_cfg.get("title") or "家庭提醒"), rows, w, h, colors, footer)
+            # 理财场景：A 屏大盘全景 / 市场摘要 / 自选行情（复用 xiaowu_platform 渲染器）
+            if scene_key == "finance" and mode in ("finance-market", "finance-summary", "finance-watch"):
+                fin = _load_finance_renderer()
+                if fin is not None:
+                    try:
+                        return fin.render_a_screen(a_cfg, cfg_root, w, h, mac=mac)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("[DUAL-RENDER] finance A fallback: %s", exc)
+
             if scene_key in ("family", "health", "finance", "office", "custom") and mode not in ("notes", "homework", "reading", "album"):
                 modules = a_cfg.get("modules") or []
                 footer = ""
@@ -837,6 +864,15 @@ def render_dual_screen(mac: str, screen: str, w: int, h: int, colors: int,
             if b_mode == "family":
                 rows = rows[:3] + [str(x) for x in (b_cfg.get("modules") or []) if str(x).strip()][:3]
             return render_scene_modules("家庭共享看板" if b_mode == "family" else "家庭日程", rows or ["暂无家庭日程"], w, h, colors, f"共 {len(events)} 项安排")
+        # 理财场景：B 屏板块动向 / 行情趋势 / K 线（复用 xiaowu_platform 渲染器）
+        if scene_key == "finance" and b_mode in ("finance-sectors", "finance-trend", "finance-kline"):
+            fin = _load_finance_renderer()
+            if fin is not None:
+                try:
+                    return fin.render_b_screen(b_cfg, cfg_root, w, h, colors, mac=mac)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("[DUAL-RENDER] finance B fallback: %s", exc)
+
         if scene_key != "study" or b_mode != "course":
             footer = ""
             if scene_key == "finance":

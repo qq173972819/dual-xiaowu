@@ -231,7 +231,7 @@ private:
             // 会降级显示在 FPC1。没有这个任务设备永远不会去拉 /api/render，
             // 屏幕上就永远看不到配对码。
             if (color_refresh_task_ == nullptr &&
-                xTaskCreate(ColorRefreshTask, "color_refresh", 4096, this, 3,
+                xTaskCreate(ColorRefreshTask, "color_refresh", 8192, this, 3,
                             &color_refresh_task_) != pdPASS) {
                 ESP_LOGW(kTag, "Cannot create color refresh task");
             }
@@ -239,7 +239,7 @@ private:
         }
         color_screen_ = candidate;
         if (color_refresh_task_ == nullptr &&
-            xTaskCreate(ColorRefreshTask, "color_refresh", 4096, this, 3,
+            xTaskCreate(ColorRefreshTask, "color_refresh", 8192, this, 3,
                         &color_refresh_task_) != pdPASS) {
             ESP_LOGW(kTag, "Cannot create color refresh task");
         }
@@ -718,20 +718,23 @@ private:
 
     // FPC2 四色屏定时自动刷新：每分钟醒来，累计到 NVS 配置的间隔（默认 30
     // 分钟）就拉一次新画面。对话页时顺延，避免语音中抢带宽。
+    //
+    // ⚠️ 刷新必须在本任务内直接执行，禁止 Application::Schedule：一次刷新含
+    // 后端渲染等待（10~40s）+ 彩屏全刷 BUSY 等待（20~45s），若占用主循环，
+    // 语音唤醒等事件会被顺延几十秒——表现为「呼叫小悟没反应」。面板总线的
+    // 并发安全由 EpaperBusGuard（epaper_bus_lock.h）保证。
     static void ColorRefreshTask(void* argument) {
         auto* self = static_cast<Ssd2683zaS3Board*>(argument);
         // NetworkEvent::Connected means the InkSight HTTP client can run. Fetch
         // immediately so an unbound device shows its MAC/pair code on FPC2
         // while the XiaoZhi activation UI remains on the FPC1 information panel.
         vTaskDelay(pdMS_TO_TICKS(3000));
-        Application::GetInstance().Schedule([self]() {
-            self->ProbeDualMode();
-            if (self->dual_mode_.load()) {
-                self->RefreshDualScreens();
-            } else {
-                self->RefreshInkSight(/*initial_full=*/true);
-            }
-        });
+        self->ProbeDualMode();
+        if (self->dual_mode_.load()) {
+            self->RefreshDualScreens();
+        } else {
+            self->RefreshInkSight(/*initial_full=*/true);
+        }
         int minutes_elapsed = 0;
         while (true) {
             vTaskDelay(pdMS_TO_TICKS(60000));
@@ -749,32 +752,29 @@ private:
             const bool regular_refresh_due =
                 minutes_elapsed >= effective_interval;
             if (regular_refresh_due) minutes_elapsed = 0;
-            Application::GetInstance().Schedule([self, regular_refresh_due,
-                                                  device_unbound]() {
-                // 每分钟检查配置版本。网页「应用到设备」产生新 savedAt 后，
-                // 不再等待默认 30 分钟的彩屏刷新周期，下一次检查即刷新双屏。
-                const bool dual_changed = self->ProbeDualMode();
-                if (dual_changed && self->dual_mode_.load()) {
-                    self->dual_refresh_pending_.store(true);
+            // 每分钟检查配置版本。网页「应用到设备」产生新 savedAt 后，
+            // 不再等待默认 30 分钟的彩屏刷新周期，下一次检查即刷新双屏。
+            const bool dual_changed = self->ProbeDualMode();
+            if (dual_changed && self->dual_mode_.load()) {
+                self->dual_refresh_pending_.store(true);
+            }
+            // 后端 X-Pending-Refresh：内容后台点了「应用到设备」→ 立即刷。
+            const bool pending_now = InkSightClient::TakePendingRefresh();
+            auto& dashboard = self->display_->dashboard();
+            if (dashboard.IsConversation() && !device_unbound &&
+                !pending_now) {
+                // 配置版本已经记为 pending；语音结束后的下一分钟再刷，
+                // 避免 A 屏在会话过程中被后台内容覆盖。
+                continue;
+            }
+            if (self->dual_mode_.load()) {
+                if (regular_refresh_due || pending_now ||
+                    self->dual_refresh_pending_.exchange(false)) {
+                    self->RefreshDualScreens();
                 }
-                // 后端 X-Pending-Refresh：内容后台点了「应用到设备」→ 立即刷。
-                const bool pending_now = InkSightClient::TakePendingRefresh();
-                auto& dashboard = self->display_->dashboard();
-                if (dashboard.IsConversation() && !device_unbound &&
-                    !pending_now) {
-                    // 配置版本已经记为 pending；语音结束后的下一分钟再刷，
-                    // 避免 A 屏在会话过程中被后台内容覆盖。
-                    return;
-                }
-                if (self->dual_mode_.load()) {
-                    if (regular_refresh_due || pending_now ||
-                        self->dual_refresh_pending_.exchange(false)) {
-                        self->RefreshDualScreens();
-                    }
-                } else if (regular_refresh_due || pending_now) {
-                    self->RefreshInkSight(false);
-                }
-            });
+            } else if (regular_refresh_due || pending_now) {
+                self->RefreshInkSight(false);
+            }
         }
     }
 #endif
@@ -1557,6 +1557,13 @@ private:
                         return storage_.RecordWav(GetAudioCodec(), p["name"].value<std::string>(),
                                                   p["seconds"].value<int>(), error)
                                    ? ReturnValue(true) : ReturnValue(error);
+                    });
+        mcp.AddTool("self.audio_mic.set_gain", "设置麦克风数字输入增益（dB，0~43）。立即生效并持久化，无需重启。",
+                    PropertyList({Property("gain", kPropertyTypeInteger, 0, 43)}),
+                    [this](const PropertyList& p) -> ReturnValue {
+                        float gain = static_cast<float>(p["gain"].value<int>());
+                        GetAudioCodec()->SetInputGain(gain);
+                        return ReturnValue(true);
                     });
     }
 

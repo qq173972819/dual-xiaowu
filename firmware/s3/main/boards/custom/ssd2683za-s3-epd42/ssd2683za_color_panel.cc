@@ -10,6 +10,8 @@
 #include <soc/gpio_reg.h>
 #include <soc/soc.h>
 
+#include "epaper_bus_lock.h"
+
 namespace {
 constexpr char kTag[] = "Ssd2683zaFpc2";
 constexpr uint32_t kBusyTimeoutMs = 45000;
@@ -249,6 +251,9 @@ bool Ssd2683zaColorPanel::ShowFrame(const uint8_t* packed_frame) {
         ESP_LOGW(kTag, "FPC2 refresh already in progress");
         return false;
     }
+    // 与 FPC1(SSD1619) 共享 SPI 总线/DC/RST：刷新任务已移出主循环，
+    // 两块面板可能并发刷新，全程持锁互斥（含 BUSY 等待）。
+    EpaperBusGuard bus_guard;
     xSemaphoreTake(mutex_, portMAX_DELAY);
     bool ok = InitializePanel();
     if (ok) {

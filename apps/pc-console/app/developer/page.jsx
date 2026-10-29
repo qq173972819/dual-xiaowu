@@ -8,7 +8,7 @@ const roleText={developer:"开发者",content_creator:"内容创作者",ip_owner
 async function api(path,{token,method="GET",body}={}){const res=await fetch(`/backend${path}`,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{}) ,...(body?{"Content-Type":"application/json"}:{})},body:body?JSON.stringify(body):undefined,cache:"no-store"});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(typeof data.detail==="string"?data.detail:`请求失败 HTTP ${res.status}`);return data}
 
 export default function DeveloperCenter(){
- const [token,setToken]=useState(""),[me,setMe]=useState(null),[apps,setApps]=useState([]),[view,setView]=useState("home"),[error,setError]=useState(""),[notice,setNotice]=useState(""),[hardware,setHardware]=useState(null),[selected,setSelected]=useState(null);
+ const [token,setToken]=useState(""),[me,setMe]=useState(null),[apps,setApps]=useState([]),[view,setView]=useState("home"),[error,setError]=useState(""),[notice,setNotice]=useState(""),[hardware,setHardware]=useState(null),[selected,setSelected]=useState(null),[importing,setImporting]=useState(false),[importResult,setImportResult]=useState(null);
  useEffect(()=>{setToken(localStorage.getItem("xiaowu-developer-token")||"");api("/developer/v1/hardware").then(setHardware)},[]);
  useEffect(()=>{if(!token)return;Promise.all([api("/developer/v1/me",{token}),api("/developer/v1/apps",{token})]).then(([u,a])=>{setMe(u);setApps(a)}).catch(()=>{localStorage.removeItem("xiaowu-developer-token");setToken("")})},[token]);
  function done(message){setNotice(message);setError("");setTimeout(()=>setNotice(""),2400)}
@@ -16,15 +16,94 @@ export default function DeveloperCenter(){
  async function createApp(e){e.preventDefault();const f=new FormData(e.currentTarget);try{const r=await api("/developer/v1/apps",{token,method:"POST",body:Object.fromEntries(f.entries())});setApps([r,...apps]);setSelected(r);done("沙箱已开通，请立即保存本次显示的 Token")}catch(err){setError(err.message)}}
  async function saveModel(e){e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/developer/v1/apps/${selected.app_id}/model`,{token,method:"PUT",body:Object.fromEntries(f.entries())});done("模型配置已加密保存，密钥不会再次回显")}catch(err){setError(err.message)}}
  async function submit(app){try{await api(`/developer/v1/apps/${app.app_id}/submit`,{token,method:"POST",body:{version:app.version,notes:"开发者中心提交审核"}});setApps(apps.map(x=>x.app_id===app.app_id?{...x,status:"in_review"}:x));done("已提交审核，只有平台管理员可发布上线")}catch(err){setError(err.message)}}
+ async function importGithub(e,appId){e.preventDefault();if(!appId){setError("请先创建或选择一个应用");return}const f=new FormData(e.currentTarget);setImporting(true);setImportResult(null);setError("");try{const r=await api(`/developer/v1/apps/${appId}/import-github`,{token,method:"POST",body:{repo_url:f.get("repo_url"),branch:f.get("branch")||"",entry:f.get("entry")||""}});setImportResult(r);setApps(apps.map(x=>x.app_id===appId?{...x,github:{repo_url:r.repo_url,commit_sha:r.commit_sha,entry:r.entry,verdict:r.report.verdict,imported_at:new Date().toISOString(),preview_url:r.preview_url,report:r.report}}:x));done(r.report.passed?`已部署到沙箱（${r.commit_sha||"HEAD"}），可打开预览`:"已导入沙箱，但仍有规则未通过，请按报告修正后重新导入")}catch(err){setError(err.message)}finally{setImporting(false)}}
  function logout(){localStorage.removeItem("xiaowu-developer-token");setToken("");setMe(null)}
  if(!token)return <div className="portal-shell"><PortalHeader/><div className="portal-intro"><div><span className="eyebrow">XIAOWU CREATOR PLATFORM</span><h1>让每一块墨水屏<br/>都有新的可能</h1><p>这里不只欢迎开发者。内容创作者、IP 商、渠道商以及每一位有好创意的人，都可以为小悟双屏贡献内容。</p><div className="trust-row"><b>人人可创作</b><b>双屏硬件规范</b><b>隔离沙箱</b><b>管理员发布</b></div></div><AuthPanel onAuth={auth} error={error}/></div><HardwareStrip hardware={hardware}/></div>;
- return <div className="creator-app"><aside className="creator-nav"><div className="creator-logo"><img src="/logo.png" alt=""/><div><b>小悟众创</b><span>CREATOR HUB</span></div></div><div className="creator-user"><i>{me?.name?.slice(0,1)}</i><div><b>{me?.name}</b><span>{roleText[me?.role]||"创作者"}{me?.organization?` · ${me.organization}`:""}</span></div></div><nav>{[["home","工作台"],["hardware","硬件规范"],["apps","我的内容"],["ai","AI 能力"],["policy","协议与安全"]].map(x=><button key={x[0]} className={view===x[0]?"on":""} onClick={()=>setView(x[0])}>{x[1]}</button>)}</nav><button className="logout" onClick={logout}>退出登录</button></aside><main className="creator-main"><header className="creator-head"><div><span className="eyebrow">CREATOR CENTER</span><h1>{({home:"众创工作台",hardware:"双屏硬件规范",apps:"应用与内容",ai:"大模型配置",policy:"协议与内容安全"})[view]}</h1></div><div className="env-pill"><i/> SANDBOX 环境</div></header>{error&&<div className="toast error">{error}</div>}{notice&&<div className="toast success">{notice}</div>}{view==="home"&&<Dashboard apps={apps} setView={setView}/>} {view==="hardware"&&<Hardware hardware={hardware}/>} {view==="apps"&&<Apps apps={apps} onCreate={createApp} onSubmit={submit} selected={selected} setSelected={setSelected}/>} {view==="ai"&&<ModelConfig apps={apps} selected={selected} setSelected={setSelected} onSave={saveModel}/>} {view==="policy"&&<Policy/>}</main></div>
+ return <div className="creator-app"><aside className="creator-nav"><div className="creator-logo"><img src="/logo.png" alt=""/><div><b>小悟众创</b><span>CREATOR HUB</span></div></div><div className="creator-user"><i>{me?.name?.slice(0,1)}</i><div><b>{me?.name}</b><span>{roleText[me?.role]||"创作者"}{me?.organization?` · ${me.organization}`:""}</span></div></div><nav>{[["home","工作台"],["hardware","硬件规范"],["apps","我的内容"],["ai","AI 能力"],["policy","协议与安全"]].map(x=><button key={x[0]} className={view===x[0]?"on":""} onClick={()=>setView(x[0])}>{x[1]}</button>)}</nav><button className="logout" onClick={logout}>退出登录</button></aside><main className="creator-main"><header className="creator-head"><div><span className="eyebrow">CREATOR CENTER</span><h1>{({home:"众创工作台",hardware:"双屏硬件规范",apps:"应用与内容",ai:"大模型配置",policy:"协议与内容安全"})[view]}</h1></div><div className="env-pill"><i/> SANDBOX 环境</div></header>{error&&<div className="toast error">{error}</div>}{notice&&<div className="toast success">{notice}</div>}{view==="home"&&<Dashboard apps={apps} setView={setView}/>} {view==="hardware"&&<Hardware hardware={hardware}/>} {view==="apps"&&<Apps apps={apps} onCreate={createApp} onSubmit={submit} selected={selected} setSelected={setSelected} onImport={importGithub} importing={importing} importResult={importResult}/>} {view==="ai"&&<ModelConfig apps={apps} selected={selected} setSelected={setSelected} onSave={saveModel}/>} {view==="policy"&&<Policy/>}</main></div>
 }
 function PortalHeader(){return <header className="portal-head"><div className="creator-logo"><img src="/logo.png" alt=""/><div><b>小悟众创</b><span>OPEN CREATOR PLATFORM</span></div></div><Link href="/">平台运营后台</Link></header>}
 function AuthPanel({onAuth,error}){const[mode,setMode]=useState("register");return <section className="auth-panel"><div className="auth-tabs"><button className={mode==="register"?"on":""} onClick={()=>setMode("register")}>注册创作者</button><button className={mode==="login"?"on":""} onClick={()=>setMode("login")}>已有账号登录</button></div><h2>{mode==="register"?"加入小悟众创":"欢迎回来"}</h2><p>{mode==="register"?"不要求会写代码，每一种创意身份都可以贡献内容。":"继续管理你的创意、内容与联调应用。"}</p><form onSubmit={e=>onAuth(e,mode)}>{mode==="register"&&<><label>你的身份<select name="role" defaultValue="developer" required><option value="developer">开发者</option><option value="content_creator">内容创作者</option><option value="ip_owner">IP 商</option><option value="channel_partner">渠道商</option><option value="other">其他</option></select></label><label>姓名<input name="name" required placeholder="你的姓名"/></label><label>团队 / 公司<input name="organization" placeholder="选填"/></label></>}<label>邮箱<input name="email" type="email" required placeholder="name@example.com"/></label><label>密码<input name="password" type="password" minLength="8" required placeholder="至少 8 位"/></label>{mode==="register"&&<div className="agreements"><label><input type="checkbox" name="accepted_terms" required/> 我已阅读并同意《开发者服务协议》</label><label><input type="checkbox" name="accepted_content_policy" required/> 我承诺不制作政治有害、色情低俗、暴力违法、侵权或欺诈内容</label></div>}{error&&<div className="form-error">{error}</div>}<button className="primary" type="submit">{mode==="register"?"同意协议并加入众创":"登录众创中心"}</button></form></section>}
 function HardwareStrip({hardware}){return <div className="hardware-strip"><span>HARDWARE / S3 DUAL E-INK</span>{hardware?.screens?.map(s=><div key={s.port}><b>{s.port}</b><p>{s.type}</p><small>{s.usage}</small></div>)}</div>}
 function Dashboard({apps,setView}){return <><div className="hero-card"><div><span>从一个好点子开始</span><h2>为双屏创造更安静、更有用的内容</h2><p>FPC1 承载清晰高频信息，FPC2 用有限色彩表达重点。所有创意先在沙箱验证，再由平台审核上线。</p><button onClick={()=>setView("apps")}>创建第一个应用 →</button></div><div className="screen-pair"><div><small>FPC1 · BW</small><b>09:41</b><p>今日专注<br/>深度工作 45 分钟</p></div><div><small>FPC2 · COLOR</small><strong>IDEA<br/>TO<br/>INK</strong></div></div></div><div className="stat-grid"><article><span>我的应用</span><b>{apps.length}</b><small>沙箱与已上线</small></article><article><span>审核中</span><b>{apps.filter(x=>x.status==="in_review").length}</b><small>等待平台处理</small></article><article><span>已上线</span><b>{apps.filter(x=>x.status==="published").length}</b><small>生产环境内容</small></article></div><section className="section-card"><h2>推荐创作场景</h2><div className="scene-grid">{scenes.map((s,i)=><article key={s[0]}><i>0{i+1}</i><b>{s[1]}</b><p>{s[2]}</p></article>)}</div></section></>}
 function Hardware({hardware}){return <><div className="spec-grid">{hardware?.screens?.map((s,i)=><article key={s.port} className={`spec-card tone-${i}`}><span>{s.port} / SCREEN {s.id}</span><h2>{s.type}</h2><p>{s.usage}</p><div>{s.colors.map(c=><i key={c} title={c} className={`ink-${c}`}/>)}</div></article>)}</div><section className="section-card"><h2>电子墨水屏适配红线</h2><div className="rule-list">{hardware?.rules?.map((r,i)=><div key={r}><b>{String(i+1).padStart(2,"0")}</b><p>{r}</p></div>)}</div><p className="subtle">刷新策略：{hardware?.refresh_strategy}</p></section></>}
-function Apps({apps,onCreate,onSubmit,selected,setSelected}){return <><section className="section-card"><h2>创建沙箱应用</h2><form className="inline-form" onSubmit={onCreate}><input name="name" required placeholder="应用名称"/><select name="scene">{scenes.map(s=><option key={s[0]} value={s[0]}>{s[1]}</option>)}</select><input name="description" placeholder="一句话说明创意"/><button>开通联调</button></form></section><section className="section-card"><div className="section-title"><h2>我的应用</h2><span>{apps.length} APPS</span></div>{!apps.length?<div className="empty-state">还没有应用。创建后会获得仅显示一次的沙箱 Token。</div>:<div className="app-list">{apps.map(a=><article key={a.app_id} onClick={()=>setSelected(a)} className={selected?.app_id===a.app_id?"selected":""}><div><span className={`status ${a.status}`}>{statusText[a.status]}</span><h3>{a.name}</h3><code>{a.app_id}</code><p>{a.description||"暂无描述"}</p>{a.sandbox_token&&<div className="token-once"><b>仅显示一次</b><code>{a.sandbox_token}</code></div>}</div><div><small>{scenes.find(s=>s[0]===a.scene)?.[1]}</small>{["sandbox","rejected"].includes(a.status)&&<button onClick={e=>{e.stopPropagation();onSubmit(a)}}>提交审核</button>}</div></article>)}</div>}</section></>}
+function Apps({apps,onCreate,onSubmit,selected,setSelected,onImport,importing,importResult}){
+  return <>
+    <section className="section-card">
+      <h2>创建沙箱应用</h2>
+      <form className="inline-form" onSubmit={onCreate}>
+        <input name="name" required placeholder="应用名称"/>
+        <select name="scene">{scenes.map(s=><option key={s[0]} value={s[0]}>{s[1]}</option>)}</select>
+        <input name="description" placeholder="一句话说明创意"/>
+        <button>开通联调</button>
+      </form>
+    </section>
+    <GithubImport apps={apps} selected={selected} setSelected={setSelected} onImport={onImport} importing={importing} result={importResult}/>
+    <section className="section-card">
+      <div className="section-title"><h2>我的应用</h2><span>{apps.length} APPS</span></div>
+      {!apps.length
+        ? <div className="empty-state">还没有应用。创建后会获得仅显示一次的沙箱 Token。</div>
+        : <div className="app-list">{apps.map(a=>
+            <article key={a.app_id} onClick={()=>setSelected(a)} className={selected?.app_id===a.app_id?"selected":""}>
+              <div>
+                <span className={`status ${a.status}`}>{statusText[a.status]}</span>
+                <h3>{a.name}</h3>
+                <code>{a.app_id}</code>
+                <p>{a.description||"暂无描述"}</p>
+                {a.github&&<div className={`gh-chip ${a.github.verdict}`}>
+                  <i>{verdictText(a.github.verdict)}</i>
+                  <small>{a.github.repo_url.replace("https://github.com/","")} · {a.github.commit_sha||"HEAD"}</small>
+                  <a href={a.github.preview_url} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>沙箱预览 →</a>
+                </div>}
+                {a.sandbox_token&&<div className="token-once"><b>仅显示一次</b><code>{a.sandbox_token}</code></div>}
+              </div>
+              <div>
+                <small>{scenes.find(s=>s[0]===a.scene)?.[1]}</small>
+                {["sandbox","rejected"].includes(a.status)&&<button onClick={e=>{e.stopPropagation();onSubmit(a)}}>提交审核</button>}
+              </div>
+            </article>
+          )}</div>}
+    </section>
+  </>;
+}
+
+function verdictText(v){return v==="fail"?"规则未通过":v==="warn"?"已部署 · 有建议":"已部署"}
+
+function GithubImport({apps,selected,setSelected,onImport,importing,result}){
+  const [appId,setAppId]=useState("");
+  const current=appId||selected?.app_id||apps[0]?.app_id||"";
+  return <section className="section-card">
+    <div className="section-title"><h2>从 GitHub 导入工程</h2><span className="gh-tag">SANDBOX</span></div>
+    <p className="subtle">支持公开仓库的纯静态工程（HTML / CSS / JS）。导入后自动按 4.2 寸双屏墨水屏规则校验：版面 400×300、字号 ≥18px、无动画与视频、色板限定黑/白/红/黄。存在不通过项时无法提交审核。</p>
+    <form className="gh-form" onSubmit={e=>onImport(e,current)}>
+      <label>目标应用<select value={current} onChange={e=>{setAppId(e.target.value);setSelected(apps.find(a=>a.app_id===e.target.value)||null)}} required>
+        <option value="">{apps.length?"请选择应用":"请先在上方创建应用"}</option>
+        {apps.map(a=><option key={a.app_id} value={a.app_id}>{a.name}</option>)}
+      </select></label>
+      <label>GitHub 仓库<input name="repo_url" required placeholder="https://github.com/owner/repo"/></label>
+      <label>分支<input name="branch" placeholder="留空 = 默认分支"/></label>
+      <label>入口文件<input name="entry" placeholder="留空 = 自动查找 index.html"/></label>
+      <button className="primary" disabled={importing||!current}>{importing?"导入并校验中…":"导入并校验"}</button>
+    </form>
+    {result&&<ImportReport result={result}/>}
+  </section>;
+}
+
+function ImportReport({result}){
+  const report=result.report||{},s=report.summary||{};
+  return <div className="gh-report">
+    <div className={`gh-verdict ${report.verdict}`}>
+      <b>{report.verdict==="pass"?"适配规则全部通过":report.verdict==="warn"?"已通过，有优化建议":"有规则未通过"}</b>
+      <span>{s.pass||0} 项通过 · {s.warn||0} 项建议 · {s.fail||0} 项不通过</span>
+      <a href={result.preview_url} target="_blank" rel="noreferrer">打开沙箱预览 →</a>
+    </div>
+    <small className="gh-meta">{result.repo_slug} · {result.commit_sha||"HEAD"} · {result.file_count} 个文件 · 入口 {result.entry}</small>
+    <div className="check-list">{(report.checks||[]).map(c=>
+      <div key={c.id} className={`check ${c.status}`}>
+        <i>{c.status==="pass"?"✓":c.status==="warn"?"!":"×"}</i>
+        <div><b>{c.label}</b><p>{c.detail}</p></div>
+      </div>
+    )}</div>
+  </div>;
+}
 function ModelConfig({apps,selected,setSelected,onSave}){return <section className="section-card model-card"><h2>为终端用户接入 AI 内容生成</h2><p>模型仅在所选应用内使用。API Key 在服务端加密保存，浏览器和查询接口都不会回显。</p><form onSubmit={onSave}><label>应用<select value={selected?.app_id||""} onChange={e=>setSelected(apps.find(a=>a.app_id===e.target.value))} required><option value="">请选择应用</option>{apps.map(a=><option key={a.app_id} value={a.app_id}>{a.name}</option>)}</select></label><div className="form-two"><label>服务商<select name="provider"><option value="deepseek">DeepSeek</option><option value="qwen">通义千问</option><option value="doubao">豆包</option><option value="openai-compatible">OpenAI Compatible</option></select></label><label>模型<input name="model" required defaultValue="deepseek-chat"/></label></div><label>Base URL<input name="base_url" placeholder="使用服务商默认地址可留空"/></label><label>API Key<input name="api_key" type="password" placeholder="留空则保留已配置密钥"/></label><label>内容生成约束<textarea name="system_prompt" rows="5" defaultValue="生成适合电子墨水屏的简洁、准确内容；不得生成违法、有害、色情、暴力、侵权或误导信息。"/></label><button className="primary">加密保存配置</button></form></section>}
 function Policy(){return <div className="policy-grid"><section className="section-card"><span className="eyebrow">AGREEMENT v2026-10-23</span><h2>开发者服务协议摘要</h2><p>开发者对提交的代码、素材和数据拥有合法权利；不得绕过沙箱、越权访问设备或收集非必要个人信息；上线版本须经平台审核，平台保留暂停、下架及追责权利。</p><p>沙箱凭据不得用于生产设备。任何生产发布、版本升级和下架操作均仅由平台管理员执行。</p></section><section className="section-card danger-card"><h2>禁止内容与行为</h2><ul><li>政治有害、危害国家安全或破坏社会稳定的信息</li><li>色情低俗、未成年人不良、暴力恐怖或违法犯罪内容</li><li>歧视仇恨、骚扰欺凌、虚假欺诈及危险健康建议</li><li>侵犯著作权、商标权、隐私权或其他第三方权益</li><li>恶意刷新屏幕、损害硬件寿命或绕过平台安全控制</li></ul></section><section className="section-card"><h2>上线流程</h2><div className="flow"><b>01 沙箱创建</b><i>→</i><b>02 模拟器联调</b><i>→</i><b>03 提交审核</b><i>→</i><b>04 管理员发布</b></div></section></div>}

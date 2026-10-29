@@ -260,7 +260,18 @@ void CustomWakeWord::Feed(const std::vector<int16_t>& data) {
             //   avg/peak > 0.4 或 clip>1% -> 增益过大/削波，语音被压平
             //   detecting 满格但 prob=0 -> 一直被当成"有语音"，噪声抬太高
             const char* hint = "";
-            if (mic_level_peak_ < 200) {
+            // VAD 锁定：绝大多数 chunk 都处在"正在识别"状态、几乎没有静音段，说明
+            // 麦克风输入被持续的非语音能量占满（增益过大削波 / 喇叭声学串扰 / 环境
+            // 持续噪声）。这会卡住唤醒词引擎——永远在"累积"、永远不出 DETECTED，
+            // 表现为「有声音但呼叫小悟没反应」。优先降麦克风增益（input_gain）。
+            const int detect_ratio = (total_chunks_ > 0)
+                                        ? detecting_chunks_ * 100 / total_chunks_
+                                        : 0;
+            if (detect_ratio >= 90 && mic_level_peak_ > 6000) {
+                hint = "(VAD锁定!麦克风持续有声音→唤醒词被压制，先降麦克风增益/增大喇叭间距)";
+            } else if (detect_ratio >= 90) {
+                hint = "(VAD长期 detecting 但电平不高：环境噪声/喇叭串音，安静环境下测试)";
+            } else if (mic_level_peak_ < 200) {
                 hint = "(疑似麦克风无数据!)";
             } else if (clip_pct >= 1) {
                 hint = "(削波!麦克风增益过大)";

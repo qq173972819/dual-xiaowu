@@ -3,11 +3,12 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
+from . import sandbox
 from .models import (AdminLogin, ContentConfigIn, ContentPush, DeveloperAppCreate, DeveloperLogin,
                      DeveloperRegister, DeviceCapabilities, DeviceEvent, DeviceRegister,
-                     Heartbeat, MobileContentPush, ModelConfigUpsert, PasswordLogin,
+                     GithubImportIn, Heartbeat, MobileContentPush, ModelConfigUpsert, PasswordLogin,
                      ReviewDecision, ReviewSubmit, SandboxAppCreate, TaskAck,
                      TemplateUpsert, WebhookCreate)
 from .connector_api import router as connector_router
@@ -19,6 +20,8 @@ from .console_api import router as console_router
 from .render_api import router as render_router
 
 store = Store(settings.database_path)
+# 开发者沙箱产物目录：与数据库同级的 data/sandbox/<app_id>/repo
+sandbox_root = settings.database_path.parent / "sandbox"
 plugin_registry = PluginRegistry(Path(__file__).resolve().parents[1] / "plugins")
 connector_registry = ConnectorRegistry(Path(__file__).resolve().parents[1] / "connectors")
 credential_vault = CredentialVault(settings.connector_master_key)
@@ -262,7 +265,16 @@ def developer_hardware() -> dict:
 
 @app.get("/developer/v1/apps")
 def developer_apps(developer: dict = Depends(current_developer)) -> list[dict]:
-    return store.list_sandbox_apps(developer["developer_id"])
+    apps = store.list_sandbox_apps(developer["developer_id"])
+    for item in apps:
+        build = store.get_sandbox_build(item["app_id"])
+        item["github"] = None if not build else {
+            "repo_url": build["repo_url"], "commit_sha": build["commit_sha"],
+            "entry": build["entry"], "verdict": build["verdict"],
+            "imported_at": build["imported_at"], "preview_url": f"/sandbox/{item['app_id']}/",
+            "report": build["report"],
+        }
+    return apps
 
 
 @app.post("/developer/v1/apps", status_code=201)
@@ -292,8 +304,67 @@ def developer_model_get(app_id: str, developer: dict = Depends(current_developer
     return store.get_model_config(app_id) or {"api_key_configured": False}
 
 
+@app.post("/developer/v1/apps/{app_id}/import-github", status_code=201)
+def developer_import_github(app_id: str, body: GithubImportIn,
+                            developer: dict = Depends(current_developer)) -> dict:
+    """从 GitHub 公开仓库导入纯静态工程到沙箱，并按 4.2 寸墨水屏规则自动校验。"""
+    app_info = store.sandbox_app(app_id, developer["developer_id"])
+    if not app_info:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "应用不存在")
+    if app_info["status"] == "in_review":
+        raise HTTPException(status.HTTP_409_CONFLICT, "应用正在审核中，暂不可修改沙箱")
+    try:
+        build = sandbox.import_static_site(body.repo_url, sandbox_root / app_id, body.branch, body.entry)
+    except sandbox.SandboxError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    store.save_sandbox_build(app_id, build)
+    store.audit(developer["developer_id"], "sandbox.github_import", app_id,
+                {"repo": build["repo_url"], "commit": build["commit_sha"],
+                 "verdict": build["report"]["verdict"]})
+    return {
+        "app_id": app_id, "repo_url": build["repo_url"], "repo_slug": build["repo_slug"],
+        "branch": build["branch"], "commit_sha": build["commit_sha"], "entry": build["entry"],
+        "file_count": build["file_count"], "size_bytes": build["size_bytes"],
+        "report": build["report"], "preview_url": f"/sandbox/{app_id}/",
+    }
+
+
+@app.get("/developer/v1/apps/{app_id}/sandbox")
+def developer_sandbox_build(app_id: str, developer: dict = Depends(current_developer)) -> dict:
+    if not store.sandbox_app(app_id, developer["developer_id"]):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "应用不存在")
+    build = store.get_sandbox_build(app_id)
+    if not build:
+        return {"app_id": app_id, "imported": False, "preview_url": f"/sandbox/{app_id}/"}
+    return {**build, "imported": True, "preview_url": f"/sandbox/{app_id}/"}
+
+
+@app.get("/sandbox/{app_id}")
+def sandbox_root_redirect(app_id: str):
+    return RedirectResponse(url=f"/sandbox/{app_id}/", status_code=307)
+
+
+@app.get("/sandbox/{app_id}/{file_path:path}")
+def sandbox_static(app_id: str, file_path: str = ""):
+    """托管开发者导入的静态工程：只读、限定在 data/sandbox/<app_id>/repo 内。"""
+    build = store.get_sandbox_build(app_id)
+    if not build:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "该应用尚未导入沙箱工程")
+    root = sandbox_root / app_id / "repo"
+    target = sandbox.resolve_asset(root, file_path or build.get("entry") or "index.html")
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "资源不存在")
+    return FileResponse(target, headers={"Cache-Control": "no-cache"})
+
+
 @app.post("/developer/v1/apps/{app_id}/submit", status_code=202)
 def developer_submit(app_id: str, body: ReviewSubmit, developer: dict = Depends(current_developer)) -> dict:
+    build = store.get_sandbox_build(app_id)
+    report = (build or {}).get("report") or {}
+    if report.get("verdict") == "fail":
+        blocking = [c["label"] for c in report.get("checks", []) if c.get("status") == "fail"]
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "沙箱工程未通过墨水屏适配规则：" + "；".join(blocking) + "。请修正后重新导入再提交")
     if not store.submit_sandbox_app(app_id, developer["developer_id"], body.version, body.notes):
         raise HTTPException(status.HTTP_409_CONFLICT, "仅沙箱或已驳回应用可提交审核")
     store.audit(developer["developer_id"], "sandbox_app.submit", app_id, {"version": body.version})

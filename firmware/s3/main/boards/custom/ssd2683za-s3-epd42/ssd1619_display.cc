@@ -11,6 +11,7 @@
 
 #include "assets/lang_config.h"
 #include "esp_lvgl_port.h"
+#include "epaper_bus_lock.h"
 
 #if EPD_ENABLE_COLOR_SCREEN
 #include "ssd2683za_color_panel.h"
@@ -604,6 +605,9 @@ void Ssd1619Display::MarkPanelFaulted() {
 }
 
 void Ssd1619Display::Refresh(const uint8_t* data, bool partial) {
+    // 与 FPC2(SSD2683ZA) 共享 SPI 总线/DC/RST：本函数可能从本类的
+    // RefreshTask 或双屏刷新任务(RawFrameRefresh)并发调用，必须互斥。
+    EpaperBusGuard bus_guard;
     if (panel_faulted_) {
         const int64_t now_ms = esp_timer_get_time() / 1000;
         // BUSY 线被钉死时，重试只会重复"复位 -> 等 3 秒 -> 超时"。与其每

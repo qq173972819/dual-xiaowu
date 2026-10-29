@@ -12,6 +12,30 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _mac_candidates(device_id: str | None) -> list[str]:
+    """Return candidate device_id keys for a MAC, covering the two spellings
+    seen across the fleet: colon-separated (DC:DA:0C:44:6D:D4) and the bare
+    12-hex form (DCDA0C446DD4).
+
+    The firmware always presents ``dc:da:0c:44:6d:d4`` (lowercase, colon),
+    but tokens/configs were historically stored under either spelling. Trying
+    both on lookup lets a token or config resolve no matter which row exists,
+    which is what keeps ``dual_mode_`` detectable on the device.
+    """
+    if not device_id:
+        return []
+    s = device_id.strip().upper()
+    digits = "".join(ch for ch in s if ch in "0123456789ABCDEF")
+    if len(digits) != 12:
+        return [s]
+    colon = ":".join(digits[i : i + 2] for i in range(0, 12, 2))
+    cands: list[str] = []
+    for c in (s, colon, digits):
+        if c and c not in cands:
+            cands.append(c)
+    return cands
+
+
 class Store:
     def __init__(self, path: Path):
         self.path = path
@@ -137,6 +161,14 @@ class Store:
               app_id TEXT PRIMARY KEY, provider TEXT NOT NULL, model TEXT NOT NULL,
               base_url TEXT NOT NULL, credential_encrypted TEXT NOT NULL,
               system_prompt TEXT NOT NULL, updated_at TEXT NOT NULL,
+              FOREIGN KEY(app_id) REFERENCES sandbox_apps(app_id)
+            );
+            CREATE TABLE IF NOT EXISTS sandbox_builds (
+              app_id TEXT PRIMARY KEY, repo_url TEXT NOT NULL, repo_slug TEXT NOT NULL DEFAULT '',
+              branch TEXT NOT NULL DEFAULT '', commit_sha TEXT NOT NULL DEFAULT '',
+              entry TEXT NOT NULL DEFAULT '', verdict TEXT NOT NULL DEFAULT 'pass',
+              report TEXT NOT NULL DEFAULT '{}', file_count INTEGER NOT NULL DEFAULT 0,
+              size_bytes INTEGER NOT NULL DEFAULT 0, imported_at TEXT NOT NULL,
               FOREIGN KEY(app_id) REFERENCES sandbox_apps(app_id)
             );
             CREATE TABLE IF NOT EXISTS webhooks (
@@ -437,10 +469,14 @@ class Store:
 
     def get_content_config(self, device_id: str) -> dict[str, Any] | None:
         with self.connect() as db:
-            row = db.execute("SELECT payload, updated_at FROM content_configs WHERE device_id=?", (device_id,)).fetchone()
-        if not row:
-            return None
-        return {"config": json.loads(row["payload"]), "updated_at": row["updated_at"]}
+            for cand in _mac_candidates(device_id):
+                row = db.execute(
+                    "SELECT payload, updated_at FROM content_configs WHERE device_id=?",
+                    (cand,),
+                ).fetchone()
+                if row:
+                    return {"config": json.loads(row["payload"]), "updated_at": row["updated_at"]}
+        return None
 
     def get_device_owner(self, device_id: str) -> str | None:
         """返回设备绑定关系的 owner（首个绑定用户），未绑定返回 None。"""
@@ -748,6 +784,37 @@ class Store:
         with self.connect() as db:
             return [dict(row) for row in db.execute(sql, params).fetchall()]
 
+    def save_sandbox_build(self, app_id: str, build: dict[str, Any]) -> None:
+        report = build.get("report") or {}
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO sandbox_builds (app_id,repo_url,repo_slug,branch,commit_sha,entry,verdict,report,"
+                "file_count,size_bytes,imported_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(app_id) DO UPDATE SET repo_url=excluded.repo_url,repo_slug=excluded.repo_slug,"
+                "branch=excluded.branch,commit_sha=excluded.commit_sha,entry=excluded.entry,verdict=excluded.verdict,"
+                "report=excluded.report,file_count=excluded.file_count,size_bytes=excluded.size_bytes,"
+                "imported_at=excluded.imported_at",
+                (app_id, build.get("repo_url", ""), build.get("repo_slug", ""), build.get("branch", ""),
+                 build.get("commit_sha", ""), build.get("entry", ""), report.get("verdict", "pass"),
+                 json.dumps(report, ensure_ascii=False), int(build.get("file_count") or 0),
+                 int(build.get("size_bytes") or 0), now_iso()),
+            )
+
+    def get_sandbox_build(self, app_id: str) -> dict[str, Any] | None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT app_id,repo_url,repo_slug,branch,commit_sha,entry,verdict,report,file_count,"
+                "size_bytes,imported_at FROM sandbox_builds WHERE app_id=?", (app_id,),
+            ).fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        try:
+            result["report"] = json.loads(result["report"] or "{}")
+        except json.JSONDecodeError:
+            result["report"] = {}
+        return result
+
     def submit_sandbox_app(self, app_id: str, developer_id: str, version: str, notes: str) -> bool:
         with self.connect() as db:
             cur = db.execute("UPDATE sandbox_apps SET status='in_review',version=?,review_note=?,updated_at=? "
@@ -847,10 +914,13 @@ class Store:
         if not token:
             return False
         with self.connect() as db:
-            row = db.execute("SELECT token_hash FROM device_tokens WHERE device_id=?", (device_id,)).fetchone()
-        if not row:
-            return False
-        return self.hash_token(token) == row["token_hash"]
+            for cand in _mac_candidates(device_id):
+                row = db.execute(
+                    "SELECT token_hash FROM device_tokens WHERE device_id=?", (cand,)
+                ).fetchone()
+                if row and self.hash_token(token) == row["token_hash"]:
+                    return True
+        return False
 
     def unbind_device_self(self, device_id: str) -> None:
         with self.connect() as db:

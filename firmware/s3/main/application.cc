@@ -16,6 +16,8 @@
 #include <driver/gpio.h>
 #include <arpa/inet.h>
 #include <font_awesome.h>
+#include <time.h>
+#include "esp_netif_sntp.h"
 
 #define TAG "Application"
 
@@ -82,6 +84,11 @@ void Application::Initialize() {
         xEventGroupSetBits(event_group_, MAIN_EVENT_SEND_AUDIO);
     };
     callbacks.on_wake_word_detected = [this](const std::string& wake_word) {
+        // 在音频线程直接打点：区分「检测已上报但主循环没及时处理」与
+        // 「主循环已处理但走了忽略分支」。若这行出现后长时间没有
+        // "Wake word detected: ... (state: N)"，说明主循环被长任务（如双屏
+        // 取图/刷屏）阻塞，唤醒处理被顺延。
+        ESP_LOGI(TAG, "Wake word event queued: %s", wake_word.c_str());
         xEventGroupSetBits(event_group_, MAIN_EVENT_WAKE_WORD_DETECTED);
     };
     callbacks.on_vad_change = [this](bool speaking) {
@@ -418,10 +425,32 @@ void Application::CheckAssetsVersion() {
     display->SetEmotion("microchip_ai");
 }
 
+// S3 没有电池备份 RTC：冷启动时系统时间还在 1970，首个 HTTPS（OTA/激活）握手
+// 会因证书 Not-Before 校验失败报 mbedtls error=-76，只能靠重试自愈。
+// OTA 前先用 SNTP 有界等待校时（时钟已有效则直接跳过），消除启动期 SSL 报错。
+static void WaitForSystemTimeSync() {
+    const time_t now = time(nullptr);
+    if (now > static_cast<time_t>(1700000000)) {
+        return;  // already synced
+    }
+    ESP_LOGI(TAG, "Clock not set yet; syncing time via SNTP before OTA/TLS...");
+    esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG("ntp.aliyun.com");
+    esp_netif_sntp_init(&cfg);
+    // esp_netif_sntp_sync_wait：有界等待同步完成（≤10s），超时也继续启动。
+    if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(10000)) == ESP_OK) {
+        ESP_LOGI(TAG, "SNTP time synced");
+    } else {
+        ESP_LOGW(TAG, "SNTP sync timeout; continuing startup anyway");
+    }
+    esp_netif_sntp_deinit();
+}
+
 void Application::CheckNewVersion() {
     const int MAX_RETRY = 10;
     int retry_count = 0;
     int retry_delay = 10; // Initial retry delay in seconds
+
+    WaitForSystemTimeSync();
 
     auto& board = Board::GetInstance();
     while (true) {
@@ -830,6 +859,11 @@ void Application::HandleStopListeningEvent() {
 
 void Application::HandleWakeWordDetectedEvent() {
     if (!protocol_) {
+        // 设备尚未激活 / MQTT 未连上时，唤醒词检测器已在上报检测时把自己关掉
+        // （running_=false）。这里若直接 return 就再也没人重新开启它——表现为
+        // 「喊一次有反应日志、之后彻底没反应，只能重启」。必须重新装填。
+        ESP_LOGW(TAG, "Wake word ignored: protocol not ready; re-arming detection");
+        audio_service_.EnableWakeWordDetection(true);
         return;
     }
 
@@ -871,12 +905,20 @@ void Application::HandleWakeWordDetectedEvent() {
     } else if (state == kDeviceStateActivating) {
         // Restart the activation check if the wake word is detected during activation
         SetDeviceState(kDeviceStateIdle);
+    } else {
+        // Connecting / WifiConfiguring / AudioTesting 等状态：唤醒被忽略，但检测器
+        // 已被关闭，必须重新装填，否则之后再也唤不醒。
+        ESP_LOGW(TAG, "Wake word ignored in state %d; re-arming detection", (int)state);
+        audio_service_.EnableWakeWordDetection(true);
     }
 }
 
 void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
     // Check state again in case it was changed during scheduling
     if (GetDeviceState() != kDeviceStateConnecting) {
+        ESP_LOGW(TAG, "ContinueWakeWordInvoke skipped (state=%d); re-arming detection",
+                 (int)GetDeviceState());
+        audio_service_.EnableWakeWordDetection(true);
         return;
     }
 
@@ -886,6 +928,7 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
 
     if (!protocol_->IsAudioChannelOpened()) {
         if (!protocol_->OpenAudioChannel()) {
+            ESP_LOGW(TAG, "OpenAudioChannel failed for wake word; re-arming detection");
             audio_service_.EnableWakeWordDetection(true);
             return;
         }
@@ -1074,6 +1117,10 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
 
 void Application::WakeWordInvoke(const std::string& wake_word) {
     if (!protocol_) {
+        // 同 HandleWakeWordDetectedEvent：没协议时唤醒被丢弃，检测器已被自己关闭，
+        // 必须重新装填，否则之后彻底唤不醒。
+        ESP_LOGW(TAG, "WakeWordInvoke ignored: protocol not ready; re-arming detection");
+        audio_service_.EnableWakeWordDetection(true);
         return;
     }
 

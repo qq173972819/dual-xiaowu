@@ -1,8 +1,9 @@
-:root{font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;color:#17201d;background:#edf0ea}*{box-sizing:border-box}body{margin:0}button,input{font:inherit}main{min-height:100vh;display:grid;grid-template-columns:230px 1fr}aside{background:#17251f;color:#eef5ee;padding:32px 20px;display:flex;flex-direction:column}.brand span{display:block;font-size:22px;font-weight:750}.brand b{display:block;color:#9db8a7;font-size:11px;letter-spacing:.18em;margin-top:5px}nav{display:grid;gap:7px;margin-top:42px}nav button{border:0;background:transparent;color:#b8c8bf;text-align:left;padding:12px 14px;border-radius:10px;cursor:pointer}nav button.active,nav button:hover{color:white;background:#2b4036}aside p{margin-top:auto;color:#83978c;font-size:12px;line-height:1.7}section{padding:38px;min-width:0}header{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-bottom:28px}header small{color:#75847c;letter-spacing:.14em}h1{margin:6px 0 0;font-size:30px}.auth{display:flex;gap:8px}.auth input{border:1px solid #ccd4ce;border-radius:9px;padding:10px 12px;background:white}.auth button{border:0;border-radius:9px;padding:10px 16px;background:#d8ef58;color:#17201d;font-weight:700;cursor:pointer}.metrics{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:16px}.metric{background:white;border:1px solid #dae0db;border-radius:15px;padding:22px;box-shadow:0 8px 24px #20372a0a}.metric span{color:#718078;font-size:13px}.metric b{display:block;font-size:34px;margin-top:14px}.table-wrap{overflow:auto;background:white;border:1px solid #dae0db;border-radius:15px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:13px 15px;border-bottom:1px solid #edf0ed;text-align:left;vertical-align:top}th{color:#637269;background:#f7f9f6;white-space:nowrap}pre{font:inherit;white-space:pre-wrap;min-width:100px;margin:0;max-width:320px}.error,.loading,.empty{padding:24px;border-radius:12px;background:white}.error{color:#9e312b;background:#fff1ef;margin-bottom:15px}@media(max-width:850px){main{grid-template-columns:1fr}aside{display:none}section{padding:20px}.metrics{grid-template-columns:1fr 1fr}header{align-items:flex-start;flex-direction:column}.auth{width:100%}.auth input{flex:1}}
+:root{font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;color:#17201d;background:#edf0ea}*{box-sizing:border-box}body{margin:0}button,input{font:inherit}/* 以下运营后台版式全部限定在 .admin-app 内，避免裸元素选择器泄漏到 /developer 众创端 */
+.admin-app{min-height:100vh;display:grid;grid-template-columns:230px 1fr}.admin-app aside{background:#17251f;color:#eef5ee;padding:32px 20px;display:flex;flex-direction:column}.brand span{display:block;font-size:22px;font-weight:750}.brand b{display:block;color:#9db8a7;font-size:11px;letter-spacing:.18em;margin-top:5px}.admin-app nav{display:grid;gap:7px;margin-top:42px}.admin-app nav button{border:0;background:transparent;color:#b8c8bf;text-align:left;padding:12px 14px;border-radius:10px;cursor:pointer}.admin-app nav button.active,.admin-app nav button:hover{color:white;background:#2b4036}.admin-app aside p{margin-top:auto;color:#83978c;font-size:12px;line-height:1.7}.admin-app section{padding:38px;min-width:0}.admin-app header{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-bottom:28px}.admin-app header small{color:#75847c;letter-spacing:.14em}.admin-app h1{margin:6px 0 0;font-size:30px}.auth{display:flex;gap:8px}.auth input{border:1px solid #ccd4ce;border-radius:9px;padding:10px 12px;background:white}.auth button{border:0;border-radius:9px;padding:10px 16px;background:#d8ef58;color:#17201d;font-weight:700;cursor:pointer}.metrics{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:16px}.metric{background:white;border:1px solid #dae0db;border-radius:15px;padding:22px;box-shadow:0 8px 24px #20372a0a}.metric span{color:#718078;font-size:13px}.metric b{display:block;font-size:34px;margin-top:14px}.table-wrap{overflow:auto;background:white;border:1px solid #dae0db;border-radius:15px}.admin-app table{border-collapse:collapse;width:100%;font-size:13px}.admin-app th,.admin-app td{padding:13px 15px;border-bottom:1px solid #edf0ed;text-align:left;vertical-align:top}.admin-app th{color:#637269;background:#f7f9f6;white-space:nowrap}.admin-app pre{font:inherit;white-space:pre-wrap;min-width:100px;margin:0;max-width:320px}.error,.loading,.empty{padding:24px;border-radius:12px;background:white}.error{color:#9e312b;background:#fff1ef;margin-bottom:15px}@media(max-width:850px){main{grid-template-columns:1fr}aside{display:none}section{padding:20px}.metrics{grid-template-columns:1fr 1fr}header{align-items:flex-start;flex-direction:column}.auth{width:100%}.auth input{flex:1}}
 
 /* 侧边栏「双屏内容配置」入口：与菜单按钮同款式、更醒目 */
-nav a{display:block;text-decoration:none;border:0;text-align:left;padding:12px 14px;border-radius:10px;background:#d8ef58;color:#17251f;font-weight:700;cursor:pointer}
-nav a:hover{background:#c8e344;color:#17251f}
+.admin-app nav a{display:block;text-decoration:none;border:0;text-align:left;padding:12px 14px;border-radius:10px;background:#d8ef58;color:#17251f;font-weight:700;cursor:pointer}
+.admin-app nav a:hover{background:#c8e344;color:#17251f}
 
 /* 内容配置后台说明着陆页 */
 .page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px}
@@ -23,3 +24,43 @@ nav a:hover{background:#c8e344;color:#17251f}
 .auth-panel select{border:1px solid #d5dbd5;border-radius:9px;padding:11px;background:#fbfcf9;color:#17211d;width:100%}
 .review-list{display:grid;gap:12px}.review-list article{background:white;border:1px solid #dae0db;border-radius:14px;padding:20px;display:flex;justify-content:space-between;gap:20px}.review-list h3{margin:9px 0}.review-list p{color:#647169}.review-list article>div:last-child{display:flex;gap:8px;align-items:center}.review-list button{border:1px solid #d6ddd8;background:#fff;border-radius:8px;padding:9px 13px}.review-list button.approve{background:#173a2c;color:white;border-color:#173a2c}
 .admin-login-page{display:grid;grid-template-columns:minmax(0,1fr);place-items:center;background:#eef0e8;min-height:100vh;padding:24px}.admin-login-card{width:min(430px,100%);background:white;border:1px solid #d7ddd7;border-radius:20px;padding:34px;box-shadow:0 25px 80px #1b30241a}.admin-login-card>img{width:48px;height:48px;border-radius:12px}.admin-login-card>small{display:block;letter-spacing:.16em;color:#748078;margin-top:22px}.admin-login-card h1{font-size:28px;margin:8px 0}.admin-login-card>p{color:#77827c}.admin-login-card form{display:grid;gap:14px;margin-top:24px}.admin-login-card label{display:grid;gap:6px;font-size:12px;color:#5d6b63}.admin-login-card input{border:1px solid #ccd4ce;border-radius:9px;padding:12px}.admin-login-card button{border:0;border-radius:9px;padding:12px;background:#173a2c;color:white;font-weight:700}.auth button.logout-admin{background:#e5e9e4;color:#435048}
+
+/* 众创端（/developer）自持样式：不再依赖运营后台泄漏的元素选择器 */
+.creator-head{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-bottom:28px}
+.creator-head h1{margin:6px 0 0;font-size:30px}
+.creator-nav nav{display:grid;gap:7px}
+.creator-nav nav button{border:0;background:transparent;color:#b8c8bf;text-align:left;padding:12px 14px;border-radius:10px;cursor:pointer}
+.creator-nav nav button:hover{color:#fff;background:#2b4036}
+
+/* GitHub 导入沙箱 + 4.2 寸墨水屏适配校验报告 */
+.gh-tag{font-size:10px;letter-spacing:.16em;border:1px solid #cdd2c8;border-radius:99px;padding:5px 9px;color:#63736a}
+.gh-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}
+.gh-form label{display:grid;gap:6px;font-size:12px;color:#5f6c65}
+.gh-form input,.gh-form select{border:1px solid #d5dbd5;border-radius:9px;padding:11px;background:#fbfcf9;font-size:13px;min-width:0}
+.gh-form button{grid-column:1/-1;justify-self:start}
+.gh-form button[disabled]{opacity:.55;cursor:not-allowed}
+.gh-report{margin-top:18px;border:1px solid #e2e6de;border-radius:14px;padding:16px;background:#fbfcf8}
+.gh-verdict{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:6px}
+.gh-verdict b{font-size:15px}
+.gh-verdict span{font-size:12px;color:#6b7871}
+.gh-verdict a{margin-left:auto;font-size:12px;color:#1d5c43;text-decoration:none;border-bottom:1px solid #a9c3b4}
+.gh-verdict.pass b{color:#1f7a4d}
+.gh-verdict.warn b{color:#8a6a12}
+.gh-verdict.fail b{color:#a3332c}
+.gh-meta{display:block;color:#7c8881;margin-bottom:12px;word-break:break-all}
+.check-list{display:grid;gap:8px}
+.check{display:flex;gap:11px;padding:11px 13px;border-radius:10px;background:#fff;border:1px solid #e6e9e2}
+.check i{flex:0 0 20px;height:20px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:11px;font-weight:700;background:#e8efe9;color:#2c6b4e}
+.check b{display:block;font-size:13px}
+.check p{margin:3px 0 0;font-size:12px;line-height:1.6;color:#617068}
+.check.warn{border-color:#efe4c6}
+.check.warn i{background:#fbf1d6;color:#8a6a12}
+.check.fail{border-color:#f3d3cf}
+.check.fail i{background:#fde5e1;color:#a3332c}
+.gh-chip{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:10px;padding:9px 11px;border-radius:10px;background:#f3f7f1;border:1px solid #e0e7dc;font-size:12px}
+.gh-chip i{font-style:normal;font-weight:700;color:#1f7a4d}
+.gh-chip.warn i{color:#8a6a12}
+.gh-chip.fail i{color:#a3332c}
+.gh-chip small{color:#78847e}
+.gh-chip a{margin-left:auto;color:#1d5c43;text-decoration:none;border-bottom:1px solid #a9c3b4}
+@media(max-width:650px){.gh-form{grid-template-columns:1fr}}

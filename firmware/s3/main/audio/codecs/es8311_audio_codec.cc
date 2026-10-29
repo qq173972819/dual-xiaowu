@@ -3,6 +3,7 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include "settings.h"
 #define TAG "Es8311AudioCodec"
 
 void Es8311AudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk,
@@ -56,9 +57,23 @@ Es8311AudioCodec::Es8311AudioCodec(void* i2c_master_handle, i2c_port_t i2c_port,
     output_sample_rate_ = output_sample_rate;
     pa_pin_ = pa_pin;
     pa_inverted_ = pa_inverted;
-    // ZTS6216 sensitivity is -38 dBV/Pa.  Use the ES8311's maximum supported
-    // digital input gain; the analog PGA remains at 30 dB in REG14=0x1A.
-    input_gain_ = 42;
+    // ZTS6216 sensitivity is -38 dBV/Pa.  The ES8311 analog PGA is already at
+    // 30 dB (REG14=0x1A, set by the driver).  The previous default of 42 dB of
+    // *digital* input gain pushed the total mic path to ~72 dB, which clips
+    // normal room speech (peak slamming into int16 max) and keeps MultiNet's VAD
+    // permanently in the "detecting" state — so the wake word ("呼叫小悟") never
+    // reaches a DETECTED state and prob stays 0.00.  Use a conservative digital
+    // gain and let it be tuned from the field via NVS (key "audio"/"input_gain")
+    // or the MCP tool, with no reflash required.
+    input_gain_ = 18.0f;
+    {
+        Settings settings("audio", /*read_write=*/false);
+        const int32_t saved = settings.GetInt("input_gain", 18);
+        // Guard against absurd values that would clip or go silent.
+        if (saved >= 0 && saved <= 43) {
+            input_gain_ = static_cast<float>(saved);
+        }
+    }
 
     assert(input_sample_rate_ == output_sample_rate_);
     CreateDuplexChannels(mclk, bclk, ws, dout, din);
@@ -202,6 +217,16 @@ void Es8311AudioCodec::SetOutputVolume(int volume) {
         ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(dev_, volume));
     }
     AudioCodec::SetOutputVolume(volume);
+}
+
+void Es8311AudioCodec::SetInputGain(float gain) {
+    input_gain_ = gain;
+    if (dev_ != nullptr) {
+        ESP_ERROR_CHECK(esp_codec_dev_set_in_gain(dev_, input_gain_));
+    }
+    Settings settings("audio", /*read_write=*/true);
+    settings.SetInt("input_gain", static_cast<int32_t>(input_gain_));
+    ESP_LOGI(TAG, "Set input gain to %.1f dB (persisted to NVS)", input_gain_);
 }
 
 void Es8311AudioCodec::EnableInput(bool enable) {
