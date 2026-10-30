@@ -1,6 +1,17 @@
 import os
 from pathlib import Path
 
+# 加载项目根目录的 .env（xiaowu_platform/ 的上一级）。
+# 此前代码从不读取 .env，run_backend.bat 也不注入环境变量，
+# 导致 XIAOWU_ADMIN_USERNAME / XIAOWU_ADMIN_PASSWORD 实际为空，管理员无法登录。
+# override=False：真实环境变量优先于 .env，便于部署时覆盖。
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
+except ImportError:
+    pass
+
 class Settings:
     def __init__(self) -> None:
         self.dev_mode = os.getenv("XIAOWU_DEV_MODE", "true").lower() in {"1", "true", "yes"}
