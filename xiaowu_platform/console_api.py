@@ -269,59 +269,9 @@ def post_dual_config(mac: str, body: dict[str, Any], user_id: str = Depends(curr
     return {"ok": True, "updated_at": ts}
 
 
-# ——— 设备取图（固件 /api/render，与 legacy-api 契约一致）———
-@router.get("/api/render")
-async def render_image(
-    mac: str | None = Query(default=None),
-    w: int = Query(default=400),
-    h: int = Query(default=300),
-    persona: str = Query(default=""),
-    bpp: int = Query(default=2),
-    colors: int = Query(default=4),
-    v: float | None = Query(default=None),
-    battery: int | None = Query(default=None),
-    rssi: int | None = Query(default=None),
-    x_device_token: Annotated[str | None, Header()] = None,
-) -> Response:
-    """设备取图接口（与固件 /api/render 契约一致）。
-
-    双屏模式固件按 screen 分两次请求：DUAL_A → 1-bit BMP（A 屏黑白），
-    DUAL_B → 4 色 2bpp 原始帧（B 屏彩色）。复用 xiaowu_platform 已支持 finance
-    （大盘全景 / 板块动向 / 自选行情 / K 线）的 render_dual_screen。
-    """
-    if persona not in ("DUAL_A", "DUAL_B"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "unsupported persona for this backend")
-    screen = "B" if persona == "DUAL_B" else "A"
-    dual_cfg = None
-    if mac:
-        mac = mac.strip().upper()
-        dual_cfg = store.get_content_config(mac)
-    # 鉴权：固件以 X-Device-Token 标识；本地环境对「配置存在」的设备放宽，避免 401 死循环。
-    authorized = bool(mac and x_device_token and store.verify_device_token(mac, x_device_token))
-    if not authorized and mac and dual_cfg:
-        authorized = True
-    if not authorized:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "无权访问该设备画面")
-    cfg_colors = ((dual_cfg or {}).get("screen") or {}).get("colors")
-    eff_colors = cfg_colors if isinstance(cfg_colors, int) and cfg_colors in (2, 3, 4) else colors
-    eff_colors = min(eff_colors, colors)
-    try:
-        img = _render.render_dual_screen(
-            mac or "", screen, w, h, eff_colors, dual_cfg,
-            battery=battery if screen == "A" else None,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("[RENDER] dual render failed for %s/%s: %s", mac, persona, exc)
-        img = _render.render_error(mac or "unknown", w, h)
-    if screen == "B":
-        out = _render.image_to_raw_2bpp(img)
-        return Response(
-            content=out,
-            media_type="application/octet-stream",
-            headers={"X-Mode-Id": persona},
-        )
-    out = _render.image_to_bmp_bytes(img)
-    return Response(content=out, media_type="image/bmp", headers={"X-Mode-Id": persona})
+# 注：固件取图接口 GET /api/render 统一由 render_api.py 提供（含设备绑定判定、
+# X-Device-Unbound / X-Pair-Code 响应头、空 persona 容错）。此处不再重复定义，
+# 否则会因路由注册顺序覆盖固件真正需要的实现，导致空 persona 请求 404。
 
 
 # ——— 天气预览（演示数据，方便配置界面查看效果）———

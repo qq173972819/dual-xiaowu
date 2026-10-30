@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
     cpus: 1,
   },
   async rewrites() {
-    const backend = process.env.INKSIGHT_BACKEND_API_BASE?.replace(/\/$/, "") || "http://127.0.0.1:8104";
+    const backend = process.env.INKSIGHT_BACKEND_API_BASE?.replace(/\/$/, "") || "http://127.0.0.1:8092";
     return [{ source: "/api/:path*", destination: `${backend}/api/:path*` }];
   },
 };
